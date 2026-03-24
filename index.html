@@ -693,45 +693,62 @@
         `;
         return;
       }
+function groupByComponent(offers) {
+  const grouped = {};
 
-      filtered.forEach(item => {
-        const isOwner = state.currentUser && state.currentUser.id === item.ownerId;
-        const trackingHtml = item.tracking
-          ? `<div class="small muted">Tracking: ${escapeHtml(item.tracking)}</div>`
-          : "";
+  offers.forEach(o => {
+    if (!grouped[o.title]) {
+      grouped[o.title] = [];
+    }
+    grouped[o.title].push(o);
+  });
 
-        const card = document.createElement("article");
-        card.className = "card";
-        card.innerHTML = `
-          <div class="thumb">${escapeHtml(item.title)}</div>
-          <div class="card-body">
-            <div class="row between">
-              <strong>${escapeHtml(item.title)}</strong>
-              ${getStatusBadge(item.status)}
-            </div>
+  return grouped;
+}
+     const grouped = groupByComponent(filtered);
 
-            <div class="chips">
-              <span class="chip">${escapeHtml(item.type)}</span>
-              <span class="chip">${escapeHtml(item.brand)}</span>
-              <span class="chip">${escapeHtml(item.condition)}</span>
-              <span class="chip">${escapeHtml(item.color)}</span>
-            </div>
+Object.keys(grouped).forEach(name => {
+  const offers = grouped[name];
 
-            <div class="small muted">Venditore: ${escapeHtml(item.ownerName)}</div>
-            <div class="price">€ ${Number(item.price).toFixed(2)}</div>
-            <div class="small muted">${escapeHtml(item.notes)}</div>
-            ${trackingHtml}
+  const minPrice = Math.min(...offers.map(o => o.price));
+  const count = offers.length;
 
-            <div class="actions">
-              <button class="btn-secondary" onclick="openMessages('${item.id}')">Contatta</button>
-              <button class="${isOwner ? 'btn-orange' : 'btn'}" onclick="quickInterest('${item.id}')">
-                ${isOwner ? 'Gestisci' : 'Mi interessa'}
-              </button>
-            </div>
-          </div>
-        `;
-        grid.appendChild(card);
-      });
+  const item = offers[0];
+
+  const card = document.createElement("article");
+  card.className = "card";
+
+  card.innerHTML = `
+    <div class="thumb">${escapeHtml(name)}</div>
+    <div class="card-body">
+      
+      <div class="row between">
+        <strong>${escapeHtml(name)}</strong>
+        <span class="badge ok">${count} offerte</span>
+      </div>
+
+      <div class="chips">
+        <span class="chip">${escapeHtml(item.type)}</span>
+        <span class="chip">${escapeHtml(item.brand)}</span>
+      </div>
+
+      <div class="small muted">
+        Prezzo minimo
+      </div>
+
+      <div class="price">€ ${Number(minPrice).toFixed(2)}</div>
+
+      <div class="actions">
+        <button class="btn" onclick="openComponent('${name}')">
+          Vedi offerte
+        </button>
+      </div>
+
+    </div>
+  `;
+
+  grid.appendChild(card);
+});
     }
 
     function renderAll() {
