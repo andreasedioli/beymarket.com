@@ -411,6 +411,18 @@
   </div>
 
   <script>
+    function groupByComponent(offers) {
+  const grouped = {};
+
+  offers.forEach(o => {
+    if (!grouped[o.title]) {
+      grouped[o.title] = [];
+    }
+    grouped[o.title].push(o);
+  });
+
+  return grouped;
+}
     const STORAGE_KEYS = {
       users: "bm_users",
       currentUser: "bm_current_user",
@@ -554,13 +566,66 @@
       return '<span class="badge off">Spedito</span>';
     }
 
-    function renderListings() {
-      const q = document.getElementById("searchInput").value.toLowerCase().trim();
-      const fType = document.getElementById("filterType").value;
-      const fCondition = document.getElementById("filterCondition").value;
-      const fStatus = document.getElementById("filterStatus").value;
-      const grid = document.getElementById("listingGrid");
-      grid.innerHTML = "";
+function renderListings() {
+  const grid = document.getElementById("listingGrid");
+  grid.innerHTML = "";
+
+  const grouped = groupByComponent(state.listings);
+
+  Object.keys(grouped).forEach(name => {
+    const offers = grouped[name];
+
+    const minPrice = Math.min(...offers.map(o => o.price));
+    const count = offers.length;
+
+    const item = offers[0];
+
+    const card = document.createElement("article");
+    card.className = "card";
+
+    card.innerHTML = `
+      <div class="thumb">${name}</div>
+      <div class="card-body">
+        
+        <div class="row between">
+          <strong>${name}</strong>
+          <span class="badge ok">${count} offerte</span>
+        </div>
+
+        <div class="chips">
+          <span class="chip">${item.type}</span>
+          <span class="chip">${item.brand}</span>
+        </div>
+
+        <div class="small muted">
+          Prezzo minimo sul mercato
+        </div>
+
+        <div class="price">€ ${minPrice.toFixed(2)}</div>
+
+        <div class="actions">
+          <button class="btn" onclick="openComponent('${name}')">
+            Vedi offerte
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    grid.appendChild(card);
+  });
+}
+    function openComponent(name) {
+  const offers = state.listings.filter(o => o.title === name);
+
+  let text = `Offerte per ${name}:\n\n`;
+
+  offers.forEach(o => {
+    text += `${o.ownerName} - ${o.condition} - €${o.price}\n`;
+  });
+
+  alert(text);
+}
 
       const filtered = state.listings.filter(item => {
         const haystack = `${item.title} ${item.brand} ${item.color} ${item.notes}`.toLowerCase();
