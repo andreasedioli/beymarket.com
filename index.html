@@ -90,7 +90,7 @@
       overflow:hidden;
       display:flex;
       flex-direction:column;
-      min-height:330px;
+      min-height:300px;
     }
     .thumb{
       height:145px;
@@ -185,12 +185,44 @@
       font-size:12px;
       text-align:center;
     }
+    table.market-table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:18px;
+      font-size:14px;
+    }
+    .market-table th,
+    .market-table td{
+      border-bottom:1px solid var(--line);
+      padding:12px 10px;
+      text-align:left;
+    }
+    .market-table th{
+      color:var(--muted);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+    }
+    .market-top{
+      display:flex;
+      gap:16px;
+      flex-wrap:wrap;
+      margin:16px 0 8px;
+    }
+    .market-pill{
+      background:var(--panel2);
+      border:1px solid var(--line);
+      padding:10px 12px;
+      border-radius:12px;
+      min-width:140px;
+    }
     @media (max-width:900px){
       .hero,.layout{grid-template-columns:1fr}
       .toolbar{grid-template-columns:1fr 1fr}
     }
     @media (max-width:640px){
       .toolbar,.grid-2,.actions{grid-template-columns:1fr}
+      .market-table{font-size:12px}
     }
   </style>
 </head>
@@ -211,7 +243,7 @@
       <div class="panel">
         <h2>Prototipo funzionante</h2>
         <p class="muted" style="margin-top:10px">
-          Questa è una base vera per testare l'idea. I dati vengono salvati nel browser.
+          Vista mercato raggruppata per componente, come base stile Cardmarket.
         </p>
 
         <div class="stats">
@@ -254,9 +286,12 @@
       <input id="searchInput" type="text" placeholder="Cerca pezzo, marca, colore..." />
       <select id="filterType">
         <option value="">Tipo pezzo</option>
+        <option>Chip</option>
         <option>Blade</option>
+        <option>Assist Blade</option>
         <option>Ratchet</option>
         <option>Bit</option>
+        <option>Ticket</option>
         <option>Launcher</option>
         <option>Altro</option>
       </select>
@@ -284,8 +319,8 @@
           <h3>Come funziona</h3>
           <div class="side-list small muted" style="margin-top:12px">
             <div>1. Il venditore pubblica un articolo.</div>
-            <div>2. L'acquirente lo contatta.</div>
-            <div>3. Si accordano fuori dal sito.</div>
+            <div>2. L'acquirente apre la scheda componente.</div>
+            <div>3. Sceglie una delle offerte e contatta il venditore.</div>
             <div>4. Il venditore inserisce il tracking.</div>
           </div>
         </div>
@@ -303,7 +338,7 @@
     </section>
 
     <div class="footer-note">
-      Versione demo locale. Se vuoi, dopo la trasformiamo in una versione online vera.
+      Versione demo locale/browser. Il prossimo passo sarà un database vero.
     </div>
   </div>
 
@@ -349,9 +384,12 @@
         <input id="listingBrand" placeholder="Marca / serie" />
 
         <select id="listingType">
+          <option>Chip</option>
           <option>Blade</option>
+          <option>Assist Blade</option>
           <option>Ratchet</option>
           <option>Bit</option>
+          <option>Ticket</option>
           <option>Launcher</option>
           <option>Altro</option>
         </select>
@@ -411,18 +449,6 @@
   </div>
 
   <script>
-    function groupByComponent(offers) {
-  const grouped = {};
-
-  offers.forEach(o => {
-    if (!grouped[o.title]) {
-      grouped[o.title] = [];
-    }
-    grouped[o.title].push(o);
-  });
-
-  return grouped;
-}
     const STORAGE_KEYS = {
       users: "bm_users",
       currentUser: "bm_current_user",
@@ -447,11 +473,20 @@
       }
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
     const seedListings = [
       {
         id: uid(),
         title: "Dran Sword",
-        brand: "Beyblade X",
+        brand: "Takara Tomy",
         type: "Blade",
         condition: "Usato",
         color: "Blu",
@@ -459,6 +494,34 @@
         notes: "Buone condizioni, leggere microtracce.",
         ownerId: "seed1",
         ownerName: "Marco",
+        status: "available",
+        tracking: ""
+      },
+      {
+        id: uid(),
+        title: "Dran Sword",
+        brand: "Takara Tomy",
+        type: "Blade",
+        condition: "Nuovo",
+        color: "Rosso",
+        price: 18,
+        notes: "Mai usato.",
+        ownerId: "seed2",
+        ownerName: "Luca",
+        status: "available",
+        tracking: ""
+      },
+      {
+        id: uid(),
+        title: "Dran Sword",
+        brand: "Takara Tomy",
+        type: "Blade",
+        condition: "Usato",
+        color: "Blu",
+        price: 9,
+        notes: "Segni leggeri di utilizzo.",
+        ownerId: "seed3",
+        ownerName: "Sara",
         status: "available",
         tracking: ""
       },
@@ -475,20 +538,6 @@
         ownerName: "Luca",
         status: "available",
         tracking: ""
-      },
-      {
-        id: uid(),
-        title: "3-60 Ratchet",
-        brand: "Hasbro",
-        type: "Ratchet",
-        condition: "Usato",
-        color: "Rosso",
-        price: 5,
-        notes: "Spedito di recente.",
-        ownerId: "seed3",
-        ownerName: "Sara",
-        status: "shipped",
-        tracking: "IT1234567890"
       }
     ];
 
@@ -510,15 +559,6 @@
       save(STORAGE_KEYS.currentUser, state.currentUser);
       save(STORAGE_KEYS.listings, state.listings);
       save(STORAGE_KEYS.messages, state.messages);
-    }
-
-    function escapeHtml(str) {
-      return String(str)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
     }
 
     function openModal(id) {
@@ -554,209 +594,175 @@
       document.getElementById("btnLogout").classList.toggle("hidden", !state.currentUser);
     }
 
+    function renderStats() {
+      document.getElementById("statListings").textContent = state.listings.length;
+      document.getElementById("statMessages").textContent = state.messages.length;
+      document.getElementById("statTracking").textContent = state.listings.filter(x => x.tracking).length;
+    }
+
+    function groupByComponent(offers) {
+      const grouped = {};
+
+      offers.forEach(o => {
+        const key = o.title;
+        if (!key) return;
+
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+
+        grouped[key].push(o);
+      });
+
+      return grouped;
+    }
+
     function renderListings() {
-  const q = document.getElementById("searchInput").value.toLowerCase().trim();
-  const fType = document.getElementById("filterType").value;
-  const fCondition = document.getElementById("filterCondition").value;
-  const fStatus = document.getElementById("filterStatus").value;
-  const grid = document.getElementById("listingGrid");
-  grid.innerHTML = "";
-
-  // 🔍 prima filtriamo
-  const filtered = state.listings.filter(item => {
-    const text = (item.title + " " + item.brand + " " + item.color + " " + item.notes).toLowerCase();
-
-    return (!q || text.includes(q)) &&
-           (!fType || item.type === fType) &&
-           (!fCondition || item.condition === fCondition) &&
-           (!fStatus || item.status === fStatus);
-  });
-
-  // 🧠 poi raggruppiamo
-  const grouped = groupByComponent(filtered);
-
-  Object.keys(grouped).forEach(name => {
-    const offers = grouped[name];
-
-    const minPrice = Math.min(...offers.map(o => o.price));
-    const count = offers.length;
-
-    const item = offers[0];
-
-    const card = document.createElement("article");
-    card.className = "card";
-
-    card.innerHTML = `
-      <div class="thumb">${name}</div>
-      <div class="card-body">
-        
-        <div class="row between">
-          <strong>${name}</strong>
-          <span class="badge ok">${count} offerte</span>
-        </div>
-
-        <div class="chips">
-          <span class="chip">${item.type}</span>
-          <span class="chip">${item.brand}</span>
-        </div>
-
-        <div class="small muted">
-          Prezzo minimo sul mercato
-        </div>
-
-        <div class="price">€ ${minPrice.toFixed(2)}</div>
-
-        <div class="actions">
-          <button class="btn" onclick="openComponent('${name}')">
-            Vedi offerte
-          </button>
-        </div>
-
-      </div>
-    `;
-
-    grid.appendChild(card);
-  });
-}
-
-  const grouped = groupByComponent(state.listings);
-
-  Object.keys(grouped).forEach(name => {
-    const offers = grouped[name];
-
-    const minPrice = Math.min(...offers.map(o => o.price));
-    const count = offers.length;
-
-    const item = offers[0];
-
-    const card = document.createElement("article");
-    card.className = "card";
-
-    card.innerHTML = `
-      <div class="thumb">${name}</div>
-      <div class="card-body">
-        
-        <div class="row between">
-          <strong>${name}</strong>
-          <span class="badge ok">${count} offerte</span>
-        </div>
-
-        <div class="chips">
-          <span class="chip">${item.type}</span>
-          <span class="chip">${item.brand}</span>
-        </div>
-
-        <div class="small muted">
-          Prezzo minimo sul mercato
-        </div>
-
-        <div class="price">€ ${minPrice.toFixed(2)}</div>
-
-        <div class="actions">
-          <button class="btn" onclick="openComponent('${name}')">
-            Vedi offerte
-          </button>
-        </div>
-
-      </div>
-    `;
-
-    grid.appendChild(card);
-  });
-}
-    function openComponent(name) {
-  const offers = state.listings.filter(o => o.title === name);
-
-  let text = `Offerte per ${name}:\n\n`;
-
-  offers.forEach(o => {
-    text += `${o.ownerName} - ${o.condition} - €${o.price}\n`;
-  });
-
-  alert(text);
-}
+      const q = document.getElementById("searchInput").value.toLowerCase().trim();
+      const fType = document.getElementById("filterType").value;
+      const fCondition = document.getElementById("filterCondition").value;
+      const fStatus = document.getElementById("filterStatus").value;
+      const grid = document.getElementById("listingGrid");
+      grid.innerHTML = "";
 
       const filtered = state.listings.filter(item => {
-        const haystack = `${item.title} ${item.brand} ${item.color} ${item.notes}`.toLowerCase();
-        return (!q || haystack.includes(q)) &&
+        const text = (item.title + " " + item.brand + " " + item.color + " " + item.notes).toLowerCase();
+
+        return (!q || text.includes(q)) &&
                (!fType || item.type === fType) &&
                (!fCondition || item.condition === fCondition) &&
                (!fStatus || item.status === fStatus);
       });
 
-      if (!filtered.length) {
+      const grouped = groupByComponent(filtered);
+      const names = Object.keys(grouped);
+
+      if (!names.length) {
         grid.innerHTML = `
           <div class="panel">
-            <strong>Nessun annuncio trovato.</strong>
+            <strong>Nessun componente trovato.</strong>
             <div class="small muted" style="margin-top:8px">Prova a cambiare i filtri o crea un annuncio.</div>
           </div>
         `;
         return;
       }
-function groupByComponent(offers) {
-  const grouped = {};
 
-  offers.forEach(o => {
-    if (!grouped[o.title]) {
-      grouped[o.title] = [];
-    }
-    grouped[o.title].push(o);
-  });
+      names.sort((a, b) => {
+        const minA = Math.min(...grouped[a].map(o => Number(o.price)));
+        const minB = Math.min(...grouped[b].map(o => Number(o.price)));
+        return minA - minB;
+      });
 
-  return grouped;
-}
-     const grouped = groupByComponent(filtered);
+      names.forEach(name => {
+        const offers = grouped[name];
+        const minPrice = Math.min(...offers.map(o => Number(o.price)));
+        const item = offers[0];
 
-Object.keys(grouped).forEach(name => {
-  const offers = grouped[name];
+        const card = document.createElement("article");
+        card.className = "card";
 
-  const minPrice = Math.min(...offers.map(o => o.price));
-  const count = offers.length;
+        card.innerHTML = `
+          <div class="thumb">${escapeHtml(name)}</div>
+          <div class="card-body">
+            <div class="row between">
+              <strong>${escapeHtml(name)}</strong>
+              <span class="badge ok">${offers.length} offerte</span>
+            </div>
 
-  const item = offers[0];
+            <div class="chips">
+              <span class="chip">${escapeHtml(item.type)}</span>
+              <span class="chip">${escapeHtml(item.brand)}</span>
+            </div>
 
-  const card = document.createElement("article");
-  card.className = "card";
+            <div class="small muted">Prezzo minimo sul mercato</div>
+            <div class="price">€ ${Number(minPrice).toFixed(2)}</div>
 
-  card.innerHTML = `
-    <div class="thumb">${escapeHtml(name)}</div>
-    <div class="card-body">
-      
-      <div class="row between">
-        <strong>${escapeHtml(name)}</strong>
-        <span class="badge ok">${count} offerte</span>
-      </div>
+            <div class="small muted">
+              Condizioni presenti: ${[...new Set(offers.map(o => o.condition))].join(", ")}
+            </div>
 
-      <div class="chips">
-        <span class="chip">${escapeHtml(item.type)}</span>
-        <span class="chip">${escapeHtml(item.brand)}</span>
-      </div>
+            <div class="actions">
+              <button class="btn" onclick="openComponent('${encodeURIComponent(name)}')">Vedi offerte</button>
+              <button class="btn-secondary" onclick="renderListings()">Aggiorna</button>
+            </div>
+          </div>
+        `;
 
-      <div class="small muted">
-        Prezzo minimo
-      </div>
-
-      <div class="price">€ ${Number(minPrice).toFixed(2)}</div>
-
-      <div class="actions">
-        <button class="btn" onclick="openComponent('${name}')">
-          Vedi offerte
-        </button>
-      </div>
-
-    </div>
-  `;
-
-  grid.appendChild(card);
-});
+        grid.appendChild(card);
+      });
     }
 
-    function renderAll() {
-      renderHeader();
-      renderStats();
-      renderLoginSelect();
-      renderListings();
-      persist();
+    function openComponent(encodedName) {
+      const name = decodeURIComponent(encodedName);
+      const offers = state.listings
+        .filter(o => o.title === name)
+        .sort((a, b) => Number(a.price) - Number(b.price));
+
+      const grid = document.getElementById("listingGrid");
+
+      if (!offers.length) {
+        renderListings();
+        return;
+      }
+
+      const lowest = Number(offers[0].price);
+      const uniqueSellers = new Set(offers.map(o => o.ownerName)).size;
+
+      grid.innerHTML = `
+        <div class="panel">
+          <div class="row between" style="margin-bottom:10px;flex-wrap:wrap;">
+            <div>
+              <h2 style="margin:0;">${escapeHtml(name)}</h2>
+              <div class="small muted" style="margin-top:6px;">
+                ${escapeHtml(offers[0].type)} · ${escapeHtml(offers[0].brand)}
+              </div>
+            </div>
+            <button onclick="renderListings()" class="btn-secondary" style="max-width:180px;">⬅ Torna al mercato</button>
+          </div>
+
+          <div class="market-top">
+            <div class="market-pill">
+              <div class="small muted">Prezzo minimo</div>
+              <div class="price">€ ${lowest.toFixed(2)}</div>
+            </div>
+            <div class="market-pill">
+              <div class="small muted">Offerte</div>
+              <div style="font-size:22px;font-weight:800;">${offers.length}</div>
+            </div>
+            <div class="market-pill">
+              <div class="small muted">Venditori</div>
+              <div style="font-size:22px;font-weight:800;">${uniqueSellers}</div>
+            </div>
+          </div>
+
+          <table class="market-table">
+            <thead>
+              <tr>
+                <th>Venditore</th>
+                <th>Condizione</th>
+                <th>Colore</th>
+                <th>Stato</th>
+                <th>Prezzo</th>
+                <th>Azione</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${offers.map(o => `
+                <tr>
+                  <td>${escapeHtml(o.ownerName)}</td>
+                  <td>${escapeHtml(o.condition)}</td>
+                  <td>${escapeHtml(o.color)}</td>
+                  <td>${escapeHtml(o.status)}</td>
+                  <td><strong>€ ${Number(o.price).toFixed(2)}</strong></td>
+                  <td>
+                    <button class="btn-secondary" onclick="openMessages('${o.id}')">Contatta</button>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
     }
 
     function registerUser() {
@@ -857,10 +863,6 @@ Object.keys(grouped).forEach(name => {
 
       closeModal("listingModal");
       renderAll();
-    }
-
-    function quickInterest(listingId) {
-      openMessages(listingId);
     }
 
     function openMessages(listingId) {
@@ -990,6 +992,14 @@ Object.keys(grouped).forEach(name => {
 
       renderAll();
       openMessages(listing.id);
+    }
+
+    function renderAll() {
+      renderHeader();
+      renderStats();
+      renderLoginSelect();
+      renderListings();
+      persist();
     }
 
     document.getElementById("btnAuth").addEventListener("click", () => openModal("authModal"));
