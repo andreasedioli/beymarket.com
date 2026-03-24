@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BeyMarket MVP</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --panel:#111827;
+      --panel2:#1f2937;
+      --line:#334155;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --green:#22c55e;
+      --blue:#38bdf8;
+      --orange:#f59e0b;
+      --red:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:linear-gradient(180deg,#0b1020,#0f172a);
+      color:var(--text);
+    }
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    .topbar{
+      display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+      margin-bottom:20px;
+    }
+    .brand h1{margin:0;font-size:28px}
+    .brand p{margin:6px 0 0;color:var(--muted)}
+    .panel{
+      background:rgba(17,24,39,.95);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px;
+    }
+    .hero{
+      display:grid;
+      grid-template-columns:1.3fr .7fr;
+      gap:16px;
+      margin-bottom:16px;
+    }
+    .stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+    .stat{
+      background:var(--panel2);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      min-width:120px;
+    }
+    .stat .small{font-size:12px;color:var(--muted)}
+    .toolbar{
+      display:grid;
+      grid-template-columns:2fr 1fr 1fr 1fr auto;
+      gap:10px;
+      margin:16px 0;
+    }
+    input, select, textarea, button{
+      width:100%;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#0b1220;
+      color:var(--text);
+      padding:12px 14px;
+      font:inherit;
+    }
+    textarea{min-height:100px;resize:vertical}
+    button{
+      cursor:pointer;
+      border:none;
+      font-weight:700;
+    }
+    .btn{background:linear-gradient(135deg,#16a34a,#22c55e);color:#04120a}
+    .btn-secondary{background:#172033;color:var(--text);border:1px solid var(--line)}
+    .btn-orange{background:linear-gradient(135deg,#d97706,#f59e0b);color:#201300}
+    .btn-red{background:linear-gradient(135deg,#dc2626,#ef4444);color:#250404}
+    .layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
+    .cards{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+      gap:14px;
+    }
+    .card{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:18px;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:330px;
+    }
+    .thumb{
+      height:145px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:12px;
+      font-weight:800;
+      background:linear-gradient(135deg,#0ea5e9,#0f172a 60%,#22c55e);
+    }
+    .card-body{padding:14px;display:flex;flex-direction:column;gap:10px;flex:1}
+    .row{display:flex;align-items:center;gap:10px}
+    .between{justify-content:space-between}
+    .chips{display:flex;flex-wrap:wrap;gap:8px}
+    .chip{
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      background:#0b1220;
+      padding:6px 10px;
+      border-radius:999px;
+    }
+    .price{font-size:22px;font-weight:800}
+    .small{font-size:12px}
+    .muted{color:var(--muted)}
+    .badge{
+      padding:6px 8px;
+      font-size:12px;
+      font-weight:700;
+      border-radius:999px;
+    }
+    .ok{background:rgba(34,197,94,.15);color:#86efac}
+    .wait{background:rgba(245,158,11,.15);color:#fcd34d}
+    .off{background:rgba(239,68,68,.15);color:#fca5a5}
+    .notice{
+      border-left:4px solid var(--blue);
+      background:rgba(56,189,248,.08);
+      border-radius:12px;
+      padding:12px;
+    }
+    .side-list{display:grid;gap:10px}
+    .actions{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-top:auto;
+    }
+    .hidden{display:none !important}
+    .modal{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,23,.75);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      z-index:50;
+    }
+    .modal.open{display:flex}
+    .modal-card{
+      width:min(760px,100%);
+      background:#0f172a;
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px;
+      max-height:90vh;
+      overflow:auto;
+    }
+    .grid-2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    .messages{
+      max-height:280px;
+      overflow:auto;
+      display:grid;
+      gap:10px;
+      margin:14px 0;
+    }
+    .msg{
+      background:#111827;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+    }
+    .msg strong{display:block;margin-bottom:4px}
+    .footer-note{
+      margin-top:18px;
+      color:var(--muted);
+      font-size:12px;
+      text-align:center;
+    }
+    @media (max-width:900px){
+      .hero,.layout{grid-template-columns:1fr}
+      .toolbar{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width:640px){
+      .toolbar,.grid-2,.actions{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <h1>BeyMarket MVP</h1>
+        <p>Marketplace leggero: annunci, contatto diretto e tracking obbligatorio. Nessun pagamento sul sito.</p>
+      </div>
+      <div class="row" style="min-width:260px">
+        <button id="btnAuth" class="btn-secondary">Registrati / Accedi</button>
+        <button id="btnLogout" class="btn-red hidden">Esci</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>Prototipo funzionante</h2>
+        <p class="muted" style="margin-top:10px">
+          Questa è una base vera per testare l'idea. I dati vengono salvati nel browser.
+        </p>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="small">Utente</div>
+            <div id="currentUserLabel">Ospite</div>
+          </div>
+          <div class="stat">
+            <div class="small">Annunci</div>
+            <div id="statListings">0</div>
+          </div>
+          <div class="stat">
+            <div class="small">Messaggi</div>
+            <div id="statMessages">0</div>
+          </div>
+          <div class="stat">
+            <div class="small">Tracking inseriti</div>
+            <div id="statTracking">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="notice">
+          <strong>Regola base</strong><br>
+          Il venditore deve inserire il codice di tracciamento dopo la spedizione.
+          Il sito non incassa soldi e non gestisce i pagamenti.
+        </div>
+
+        <div class="side-list small muted" style="margin-top:14px">
+          <div>✅ Registrazione</div>
+          <div>✅ Pubblicazione annunci</div>
+          <div>✅ Contatto acquirente/venditore</div>
+          <div>✅ Tracking</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <input id="searchInput" type="text" placeholder="Cerca pezzo, marca, colore..." />
+      <select id="filterType">
+        <option value="">Tipo pezzo</option>
+        <option>Blade</option>
+        <option>Ratchet</option>
+        <option>Bit</option>
+        <option>Launcher</option>
+        <option>Altro</option>
+      </select>
+      <select id="filterCondition">
+        <option value="">Condizione</option>
+        <option>Nuovo</option>
+        <option>Usato</option>
+      </select>
+      <select id="filterStatus">
+        <option value="">Stato</option>
+        <option value="available">Disponibile</option>
+        <option value="reserved">Riservato</option>
+        <option value="shipped">Spedito</option>
+      </select>
+      <button id="btnNewListing" class="btn">+ Nuovo annuncio</button>
+    </section>
+
+    <section class="layout">
+      <main>
+        <div id="listingGrid" class="cards"></div>
+      </main>
+
+      <aside>
+        <div class="panel">
+          <h3>Come funziona</h3>
+          <div class="side-list small muted" style="margin-top:12px">
+            <div>1. Il venditore pubblica un articolo.</div>
+            <div>2. L'acquirente lo contatta.</div>
+            <div>3. Si accordano fuori dal sito.</div>
+            <div>4. Il venditore inserisce il tracking.</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
+          <h3>Regole base</h3>
+          <div class="side-list small muted" style="margin-top:12px">
+            <div>• Descrizione chiara del pezzo.</div>
+            <div>• Foto reali quando andrai online davvero.</div>
+            <div>• Tracking obbligatorio dopo spedizione.</div>
+            <div>• Nessun pagamento sulla piattaforma.</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="footer-note">
+      Versione demo locale. Se vuoi, dopo la trasformiamo in una versione online vera.
+    </div>
+  </div>
+
+  <!-- MODAL AUTH -->
+  <div id="authModal" class="modal">
+    <div class="modal-card">
+      <div class="row between">
+        <h3>Registrazione / Accesso</h3>
+        <button class="btn-secondary" onclick="closeModal('authModal')">Chiudi</button>
+      </div>
+
+      <div class="grid-2" style="margin-top:14px">
+        <div class="panel">
+          <h3>Crea account</h3>
+          <div class="side-list" style="margin-top:10px">
+            <input id="regName" placeholder="Nome utente" />
+            <input id="regEmail" type="email" placeholder="Email" />
+            <button class="btn" onclick="registerUser()">Registrati</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Accedi</h3>
+          <div class="side-list" style="margin-top:10px">
+            <select id="loginSelect"></select>
+            <button class="btn-secondary" onclick="loginUser()">Accedi con utente selezionato</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NEW LISTING -->
+  <div id="listingModal" class="modal">
+    <div class="modal-card">
+      <div class="row between">
+        <h3>Nuovo annuncio</h3>
+        <button class="btn-secondary" onclick="closeModal('listingModal')">Chiudi</button>
+      </div>
+
+      <div class="grid-2" style="margin-top:14px">
+        <input id="listingTitle" placeholder="Titolo articolo" />
+        <input id="listingBrand" placeholder="Marca / serie" />
+
+        <select id="listingType">
+          <option>Blade</option>
+          <option>Ratchet</option>
+          <option>Bit</option>
+          <option>Launcher</option>
+          <option>Altro</option>
+        </select>
+
+        <select id="listingCondition">
+          <option>Nuovo</option>
+          <option>Usato</option>
+        </select>
+
+        <input id="listingColor" placeholder="Colore" />
+        <input id="listingPrice" type="number" min="0" step="0.01" placeholder="Prezzo richiesto (€)" />
+      </div>
+
+      <div style="margin-top:12px">
+        <textarea id="listingNotes" placeholder="Descrizione, difetti, note..."></textarea>
+      </div>
+
+      <div class="actions" style="margin-top:12px">
+        <button class="btn-secondary" onclick="fillExample()">Compila esempio</button>
+        <button class="btn" onclick="createListing()">Pubblica annuncio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL MESSAGES -->
+  <div id="messageModal" class="modal">
+    <div class="modal-card">
+      <div class="row between">
+        <div>
+          <h3 id="messageTitle">Contatto</h3>
+          <div id="messageSub" class="small muted"></div>
+        </div>
+        <button class="btn-secondary" onclick="closeModal('messageModal')">Chiudi</button>
+      </div>
+
+      <div id="messageLog" class="messages"></div>
+
+      <div class="grid-2">
+        <textarea id="messageText" placeholder="Scrivi un messaggio..."></textarea>
+        <div class="side-list">
+          <button class="btn-secondary" onclick="sendMessage()">Invia</button>
+          <button class="btn-orange" onclick="markReserved()">Segna riservato</button>
+        </div>
+      </div>
+
+      <div id="trackingBox" class="panel hidden" style="margin-top:12px">
+        <h3>Inserisci tracking</h3>
+        <p class="small muted" style="margin:8px 0 10px">
+          Solo il venditore può confermare la spedizione e inserire il codice.
+        </p>
+        <div class="grid-2">
+          <input id="trackingInput" placeholder="Codice tracking" />
+          <button class="btn" onclick="saveTracking()">Conferma spedizione</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEYS = {
+      users: "bm_users",
+      currentUser: "bm_current_user",
+      listings: "bm_listings",
+      messages: "bm_messages"
+    };
+
+    function uid() {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function save(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function load(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    const seedListings = [
+      {
+        id: uid(),
+        title: "Dran Sword",
+        brand: "Beyblade X",
+        type: "Blade",
+        condition: "Usato",
+        color: "Blu",
+        price: 12,
+        notes: "Buone condizioni, leggere microtracce.",
+        ownerId: "seed1",
+        ownerName: "Marco",
+        status: "available",
+        tracking: ""
+      },
+      {
+        id: uid(),
+        title: "Taper Bit",
+        brand: "Takara Tomy",
+        type: "Bit",
+        condition: "Nuovo",
+        color: "Nero",
+        price: 6.5,
+        notes: "Mai usato.",
+        ownerId: "seed2",
+        ownerName: "Luca",
+        status: "available",
+        tracking: ""
+      },
+      {
+        id: uid(),
+        title: "3-60 Ratchet",
+        brand: "Hasbro",
+        type: "Ratchet",
+        condition: "Usato",
+        color: "Rosso",
+        price: 5,
+        notes: "Spedito di recente.",
+        ownerId: "seed3",
+        ownerName: "Sara",
+        status: "shipped",
+        tracking: "IT1234567890"
+      }
+    ];
+
+    let state = {
+      users: load(STORAGE_KEYS.users, []),
+      currentUser: load(STORAGE_KEYS.currentUser, null),
+      listings: load(STORAGE_KEYS.listings, []),
+      messages: load(STORAGE_KEYS.messages, []),
+      activeListingId: null
+    };
+
+    if (state.listings.length === 0) {
+      state.listings = seedListings;
+      save(STORAGE_KEYS.listings, state.listings);
+    }
+
+    function persist() {
+      save(STORAGE_KEYS.users, state.users);
+      save(STORAGE_KEYS.currentUser, state.currentUser);
+      save(STORAGE_KEYS.listings, state.listings);
+      save(STORAGE_KEYS.messages, state.messages);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add("open");
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("open");
+    }
+
+    function renderLoginSelect() {
+      const select = document.getElementById("loginSelect");
+      select.innerHTML = "";
+
+      if (state.users.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Nessun utente registrato";
+        select.appendChild(opt);
+        return;
+      }
+
+      state.users.forEach(user => {
+        const opt = document.createElement("option");
+        opt.value = user.id;
+        opt.textContent = `${user.name} · ${user.email}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("currentUserLabel").textContent = state.currentUser ? state.currentUser.name : "Ospite";
+      document.getElementById("btnLogout").classList.toggle("hidden", !state.currentUser);
+    }
+
+    function renderStats() {
+      document.getElementById("statListings").textContent = state.listings.length;
+      document.getElementById("statMessages").textContent = state.messages.length;
+      document.getElementById("statTracking").textContent = state.listings.filter(x => x.tracking).length;
+    }
+
+    function getStatusBadge(status) {
+      if (status === "available") return '<span class="badge ok">Disponibile</span>';
+      if (status === "reserved") return '<span class="badge wait">Riservato</span>';
+      return '<span class="badge off">Spedito</span>';
+    }
+
+    function renderListings() {
+      const q = document.getElementById("searchInput").value.toLowerCase().trim();
+      const fType = document.getElementById("filterType").value;
+      const fCondition = document.getElementById("filterCondition").value;
+      const fStatus = document.getElementById("filterStatus").value;
+      const grid = document.getElementById("listingGrid");
+      grid.innerHTML = "";
+
+      const filtered = state.listings.filter(item => {
+        const haystack = `${item.title} ${item.brand} ${item.color} ${item.notes}`.toLowerCase();
+        return (!q || haystack.includes(q)) &&
+               (!fType || item.type === fType) &&
+               (!fCondition || item.condition === fCondition) &&
+               (!fStatus || item.status === fStatus);
+      });
+
+      if (!filtered.length) {
+        grid.innerHTML = `
+          <div class="panel">
+            <strong>Nessun annuncio trovato.</strong>
+            <div class="small muted" style="margin-top:8px">Prova a cambiare i filtri o crea un annuncio.</div>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const isOwner = state.currentUser && state.currentUser.id === item.ownerId;
+        const trackingHtml = item.tracking
+          ? `<div class="small muted">Tracking: ${escapeHtml(item.tracking)}</div>`
+          : "";
+
+        const card = document.createElement("article");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="thumb">${escapeHtml(item.title)}</div>
+          <div class="card-body">
+            <div class="row between">
+              <strong>${escapeHtml(item.title)}</strong>
+              ${getStatusBadge(item.status)}
+            </div>
+
+            <div class="chips">
+              <span class="chip">${escapeHtml(item.type)}</span>
+              <span class="chip">${escapeHtml(item.brand)}</span>
+              <span class="chip">${escapeHtml(item.condition)}</span>
+              <span class="chip">${escapeHtml(item.color)}</span>
+            </div>
+
+            <div class="small muted">Venditore: ${escapeHtml(item.ownerName)}</div>
+            <div class="price">€ ${Number(item.price).toFixed(2)}</div>
+            <div class="small muted">${escapeHtml(item.notes)}</div>
+            ${trackingHtml}
+
+            <div class="actions">
+              <button class="btn-secondary" onclick="openMessages('${item.id}')">Contatta</button>
+              <button class="${isOwner ? 'btn-orange' : 'btn'}" onclick="quickInterest('${item.id}')">
+                ${isOwner ? 'Gestisci' : 'Mi interessa'}
+              </button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderAll() {
+      renderHeader();
+      renderStats();
+      renderLoginSelect();
+      renderListings();
+      persist();
+    }
+
+    function registerUser() {
+      const name = document.getElementById("regName").value.trim();
+      const email = document.getElementById("regEmail").value.trim();
+
+      if (!name || !email) {
+        alert("Inserisci nome ed email.");
+        return;
+      }
+
+      const exists = state.users.some(u => u.email.toLowerCase() === email.toLowerCase());
+      if (exists) {
+        alert("Esiste già un utente con questa email.");
+        return;
+      }
+
+      const user = { id: uid(), name, email };
+      state.users.push(user);
+      state.currentUser = user;
+
+      document.getElementById("regName").value = "";
+      document.getElementById("regEmail").value = "";
+
+      closeModal("authModal");
+      renderAll();
+    }
+
+    function loginUser() {
+      const id = document.getElementById("loginSelect").value;
+      const user = state.users.find(u => u.id === id);
+
+      if (!user) {
+        alert("Seleziona un utente.");
+        return;
+      }
+
+      state.currentUser = user;
+      closeModal("authModal");
+      renderAll();
+    }
+
+    function logoutUser() {
+      state.currentUser = null;
+      renderAll();
+    }
+
+    function fillExample() {
+      document.getElementById("listingTitle").value = "Phoenix Wing";
+      document.getElementById("listingBrand").value = "Takara Tomy";
+      document.getElementById("listingType").value = "Blade";
+      document.getElementById("listingCondition").value = "Usato";
+      document.getElementById("listingColor").value = "Rosso";
+      document.getElementById("listingPrice").value = "18";
+      document.getElementById("listingNotes").value = "Usato poco, buono stato generale.";
+    }
+
+    function createListing() {
+      if (!state.currentUser) {
+        alert("Prima registrati o accedi.");
+        openModal("authModal");
+        return;
+      }
+
+      const title = document.getElementById("listingTitle").value.trim();
+      const brand = document.getElementById("listingBrand").value.trim();
+      const type = document.getElementById("listingType").value;
+      const condition = document.getElementById("listingCondition").value;
+      const color = document.getElementById("listingColor").value.trim();
+      const price = Number(document.getElementById("listingPrice").value);
+      const notes = document.getElementById("listingNotes").value.trim();
+
+      if (!title || !brand || !color || !notes || !price) {
+        alert("Compila tutti i campi.");
+        return;
+      }
+
+      state.listings.unshift({
+        id: uid(),
+        title,
+        brand,
+        type,
+        condition,
+        color,
+        price,
+        notes,
+        ownerId: state.currentUser.id,
+        ownerName: state.currentUser.name,
+        status: "available",
+        tracking: ""
+      });
+
+      document.getElementById("listingTitle").value = "";
+      document.getElementById("listingBrand").value = "";
+      document.getElementById("listingColor").value = "";
+      document.getElementById("listingPrice").value = "";
+      document.getElementById("listingNotes").value = "";
+
+      closeModal("listingModal");
+      renderAll();
+    }
+
+    function quickInterest(listingId) {
+      openMessages(listingId);
+    }
+
+    function openMessages(listingId) {
+      state.activeListingId = listingId;
+      const listing = state.listings.find(x => x.id === listingId);
+      if (!listing) return;
+
+      document.getElementById("messageTitle").textContent = listing.title;
+      document.getElementById("messageSub").textContent = `Venditore: ${listing.ownerName} · Stato: ${listing.status}`;
+      document.getElementById("messageText").value = "";
+      document.getElementById("trackingInput").value = listing.tracking || "";
+
+      const trackingBox = document.getElementById("trackingBox");
+      const isOwner = state.currentUser && state.currentUser.id === listing.ownerId;
+      trackingBox.classList.toggle("hidden", !isOwner);
+
+      renderMessages();
+      openModal("messageModal");
+    }
+
+    function renderMessages() {
+      const log = document.getElementById("messageLog");
+      log.innerHTML = "";
+
+      const listingId = state.activeListingId;
+      const listing = state.listings.find(x => x.id === listingId);
+      if (!listing) return;
+
+      const msgs = state.messages.filter(m => m.listingId === listingId);
+
+      if (!msgs.length) {
+        log.innerHTML = `<div class="msg"><strong>Sistema</strong>Ancora nessun messaggio per questo annuncio.</div>`;
+        return;
+      }
+
+      msgs.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.innerHTML = `
+          <strong>${escapeHtml(m.authorName)}</strong>
+          <div class="small muted">${escapeHtml(m.createdAt)}</div>
+          <div style="margin-top:6px">${escapeHtml(m.text)}</div>
+        `;
+        log.appendChild(div);
+      });
+    }
+
+    function sendMessage() {
+      if (!state.currentUser) {
+        alert("Prima registrati o accedi.");
+        openModal("authModal");
+        return;
+      }
+
+      if (!state.activeListingId) return;
+
+      const text = document.getElementById("messageText").value.trim();
+      if (!text) {
+        alert("Scrivi un messaggio.");
+        return;
+      }
+
+      state.messages.push({
+        id: uid(),
+        listingId: state.activeListingId,
+        authorId: state.currentUser.id,
+        authorName: state.currentUser.name,
+        text,
+        createdAt: new Date().toLocaleString("it-IT")
+      });
+
+      document.getElementById("messageText").value = "";
+      renderAll();
+      renderMessages();
+    }
+
+    function markReserved() {
+      if (!state.currentUser) {
+        alert("Prima registrati o accedi.");
+        return;
+      }
+
+      const listing = state.listings.find(x => x.id === state.activeListingId);
+      if (!listing) return;
+
+      if (state.currentUser.id !== listing.ownerId) {
+        alert("Solo il venditore può cambiare lo stato.");
+        return;
+      }
+
+      listing.status = "reserved";
+      renderAll();
+      openMessages(listing.id);
+    }
+
+    function saveTracking() {
+      if (!state.currentUser) {
+        alert("Prima registrati o accedi.");
+        return;
+      }
+
+      const listing = state.listings.find(x => x.id === state.activeListingId);
+      if (!listing) return;
+
+      if (state.currentUser.id !== listing.ownerId) {
+        alert("Solo il venditore può inserire il tracking.");
+        return;
+      }
+
+      const tracking = document.getElementById("trackingInput").value.trim();
+      if (!tracking) {
+        alert("Inserisci il codice tracking.");
+        return;
+      }
+
+      listing.tracking = tracking;
+      listing.status = "shipped";
+
+      state.messages.push({
+        id: uid(),
+        listingId: listing.id,
+        authorId: state.currentUser.id,
+        authorName: state.currentUser.name,
+        text: `Tracking inserito: ${tracking}`,
+        createdAt: new Date().toLocaleString("it-IT")
+      });
+
+      renderAll();
+      openMessages(listing.id);
+    }
+
+    document.getElementById("btnAuth").addEventListener("click", () => openModal("authModal"));
+    document.getElementById("btnLogout").addEventListener("click", logoutUser);
+    document.getElementById("btnNewListing").addEventListener("click", () => {
+      if (!state.currentUser) {
+        alert("Prima registrati o accedi.");
+        openModal("authModal");
+        return;
+      }
+      openModal("listingModal");
+    });
+
+    document.getElementById("searchInput").addEventListener("input", renderListings);
+    document.getElementById("filterType").addEventListener("change", renderListings);
+    document.getElementById("filterCondition").addEventListener("change", renderListings);
+    document.getElementById("filterStatus").addEventListener("change", renderListings);
+
+    renderAll();
+  </script>
+</body>
+</html>
