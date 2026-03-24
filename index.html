@@ -554,21 +554,70 @@
       document.getElementById("btnLogout").classList.toggle("hidden", !state.currentUser);
     }
 
-    function renderStats() {
-      document.getElementById("statListings").textContent = state.listings.length;
-      document.getElementById("statMessages").textContent = state.messages.length;
-      document.getElementById("statTracking").textContent = state.listings.filter(x => x.tracking).length;
-    }
-
-    function getStatusBadge(status) {
-      if (status === "available") return '<span class="badge ok">Disponibile</span>';
-      if (status === "reserved") return '<span class="badge wait">Riservato</span>';
-      return '<span class="badge off">Spedito</span>';
-    }
-
-function renderListings() {
+    function renderListings() {
+  const q = document.getElementById("searchInput").value.toLowerCase().trim();
+  const fType = document.getElementById("filterType").value;
+  const fCondition = document.getElementById("filterCondition").value;
+  const fStatus = document.getElementById("filterStatus").value;
   const grid = document.getElementById("listingGrid");
   grid.innerHTML = "";
+
+  // 🔍 prima filtriamo
+  const filtered = state.listings.filter(item => {
+    const text = (item.title + " " + item.brand + " " + item.color + " " + item.notes).toLowerCase();
+
+    return (!q || text.includes(q)) &&
+           (!fType || item.type === fType) &&
+           (!fCondition || item.condition === fCondition) &&
+           (!fStatus || item.status === fStatus);
+  });
+
+  // 🧠 poi raggruppiamo
+  const grouped = groupByComponent(filtered);
+
+  Object.keys(grouped).forEach(name => {
+    const offers = grouped[name];
+
+    const minPrice = Math.min(...offers.map(o => o.price));
+    const count = offers.length;
+
+    const item = offers[0];
+
+    const card = document.createElement("article");
+    card.className = "card";
+
+    card.innerHTML = `
+      <div class="thumb">${name}</div>
+      <div class="card-body">
+        
+        <div class="row between">
+          <strong>${name}</strong>
+          <span class="badge ok">${count} offerte</span>
+        </div>
+
+        <div class="chips">
+          <span class="chip">${item.type}</span>
+          <span class="chip">${item.brand}</span>
+        </div>
+
+        <div class="small muted">
+          Prezzo minimo sul mercato
+        </div>
+
+        <div class="price">€ ${minPrice.toFixed(2)}</div>
+
+        <div class="actions">
+          <button class="btn" onclick="openComponent('${name}')">
+            Vedi offerte
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    grid.appendChild(card);
+  });
+}
 
   const grouped = groupByComponent(state.listings);
 
