@@ -715,9 +715,7 @@
       <div id="profileContent"></div>
     </section>
 
-    <div class="footer-note">
-      Demo locale in browser con persistenza su localStorage. Per vedere il flusso completo offerte, puoi accedere ai profili demo dei venditori gia presenti.
-    </div>
+    <div id="footerNote" class="footer-note"></div>
   </div>
 
   <div id="authModal" class="modal">
@@ -725,7 +723,7 @@
       <div class="between">
         <div>
           <h3>Registrazione / Accesso</h3>
-          <div class="subtle">Registrazione locale con email. Nessuna password in questa demo.</div>
+          <div id="authModeNote" class="subtle"></div>
         </div>
         <button class="btn-ghost" onclick="closeModal('authModal')">Chiudi</button>
       </div>
@@ -736,6 +734,8 @@
           <div class="stack" style="margin-top: 14px;">
             <input id="regName" placeholder="Nome utente" />
             <input id="regEmail" type="email" placeholder="Email" />
+            <input id="regPassword" type="password" placeholder="Password" />
+            <div id="registerHint" class="subtle"></div>
             <button class="btn btn-block" onclick="registerUser()">Registrati</button>
           </div>
         </div>
@@ -743,8 +743,11 @@
         <div class="panel">
           <h3>Accedi</h3>
           <div class="stack" style="margin-top: 14px;">
-            <select id="loginSelect"></select>
-            <button class="btn-secondary btn-block" onclick="loginUser()">Accedi con utente selezionato</button>
+            <input id="loginEmail" type="email" placeholder="Email" />
+            <input id="loginPassword" type="password" placeholder="Password" />
+            <div id="loginHint" class="subtle"></div>
+            <button class="btn-secondary btn-block" onclick="loginUser()">Accedi</button>
+            <button id="btnGoogleLogin" class="btn-ghost btn-block" onclick="loginWithGoogle()">Accedi con Google</button>
           </div>
         </div>
       </div>
@@ -841,13 +844,28 @@
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase-config.js"></script>
   <script>
-    const STORAGE_KEYS = {
+
+    const DEMO_STORAGE_KEYS = {
       users: "bm_users",
       currentUser: "bm_current_user",
       listings: "bm_listings",
       requests: "bm_requests"
     };
+
+    const FIREBASE_COLLECTIONS = {
+      users: "users",
+      listings: "listings",
+      requests: "requests"
+    };
+
+    const MARKETPLACE_FEE_RATE = 0.05;
+    const SHIPPING_DEADLINE_DAYS = 7;
+    const DEMO_PASSWORD = "demo1234";
 
     const LISTING_SECTIONS = [
       "Beyblade",
@@ -865,9 +883,9 @@
     ];
 
     const seedUsers = [
-      { id: "seed1", name: "Marco", email: "marco@beymarket.demo" },
-      { id: "seed2", name: "Luca", email: "luca@beymarket.demo" },
-      { id: "seed3", name: "Sara", email: "sara@beymarket.demo" }
+      { id: "seed1", name: "Marco", email: "marco@beymarket.demo", password: DEMO_PASSWORD },
+      { id: "seed2", name: "Luca", email: "luca@beymarket.demo", password: DEMO_PASSWORD },
+      { id: "seed3", name: "Sara", email: "sara@beymarket.demo", password: DEMO_PASSWORD }
     ];
 
     const seedListings = [
@@ -886,7 +904,9 @@
         status: "available",
         createdAt: "2026-03-23T18:20:00.000Z",
         reservedFor: "",
-        closedRequestId: ""
+        closedRequestId: "",
+        acceptedAt: "",
+        trackingCode: ""
       },
       {
         id: "listing_seed_2",
@@ -903,7 +923,9 @@
         status: "available",
         createdAt: "2026-03-24T09:10:00.000Z",
         reservedFor: "",
-        closedRequestId: ""
+        closedRequestId: "",
+        acceptedAt: "",
+        trackingCode: ""
       },
       {
         id: "listing_seed_3",
@@ -920,7 +942,9 @@
         status: "available",
         createdAt: "2026-03-22T11:45:00.000Z",
         reservedFor: "",
-        closedRequestId: ""
+        closedRequestId: "",
+        acceptedAt: "",
+        trackingCode: ""
       },
       {
         id: "listing_seed_4",
@@ -937,19 +961,48 @@
         status: "available",
         createdAt: "2026-03-21T16:30:00.000Z",
         reservedFor: "",
-        closedRequestId: ""
+        closedRequestId: "",
+        trackingCode: "",
+        acceptedAt: ""
       }
     ];
+
+    let firebaseApp = null;
+    let auth = null;
+    let db = null;
+    let googleProvider = null;
+    let remoteUnsubscribers = [];
+    const remoteReady = {
+      users: false,
+      listings: false,
+      requests: false,
+      auth: false
+    };
 
     function uid() {
       return Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
 
-    function save(key, value) {
+    function isFirebaseConfigured(config) {
+      if (!config || typeof config !== "object") {
+        return false;
+      }
+
+      return ["apiKey", "authDomain", "projectId", "appId"].every(key => {
+        const value = String(config[key] || "").trim();
+        return value && !value.includes("YOUR_") && !value.includes("your-");
+      });
+    }
+
+    const firebaseConfig = window.BEYMARKET_FIREBASE_CONFIG || {};
+    const FIREBASE_ENABLED = isFirebaseConfigured(firebaseConfig);
+    const SUPPORTS_POPUP_AUTH = ["http:", "https:"].includes(window.location.protocol);
+
+    function saveLocal(key, value) {
       localStorage.setItem(key, JSON.stringify(value));
     }
 
-    function load(key, fallback) {
+    function loadLocal(key, fallback) {
       try {
         const raw = localStorage.getItem(key);
         return raw ? JSON.parse(raw) : fallback;
@@ -982,7 +1035,8 @@
       return {
         id: user && user.id ? user.id : uid(),
         name: user && user.name ? user.name : "Utente",
-        email: user && user.email ? user.email : ""
+        email: user && user.email ? String(user.email).toLowerCase() : "",
+        password: user && user.password ? user.password : ""
       };
     }
 
@@ -1019,7 +1073,9 @@
         status: listing && listing.status ? listing.status : "available",
         createdAt: listing && listing.createdAt ? listing.createdAt : new Date().toISOString(),
         reservedFor: listing && listing.reservedFor ? listing.reservedFor : "",
-        closedRequestId: listing && listing.closedRequestId ? listing.closedRequestId : ""
+        closedRequestId: listing && listing.closedRequestId ? listing.closedRequestId : "",
+        acceptedAt: listing && listing.acceptedAt ? listing.acceptedAt : "",
+        trackingCode: listing && listing.trackingCode ? listing.trackingCode : ""
       };
     }
 
@@ -1075,6 +1131,44 @@
       }[section] || "";
     }
 
+    function getMarketplaceFee(amount) {
+      return Number(amount || 0) * MARKETPLACE_FEE_RATE;
+    }
+
+    function getSellerNet(amount) {
+      return Number(amount || 0) - getMarketplaceFee(amount);
+    }
+
+    function getShippingDeadline(acceptedAt) {
+      if (!acceptedAt) {
+        return "";
+      }
+
+      const deadline = new Date(acceptedAt);
+      deadline.setDate(deadline.getDate() + SHIPPING_DEADLINE_DAYS);
+      return deadline.toISOString();
+    }
+
+    function getShippingStatusText(listing) {
+      if (!listing.acceptedAt) {
+        return "";
+      }
+
+      const deadlineIso = getShippingDeadline(listing.acceptedAt);
+      const deadline = new Date(deadlineIso);
+      const now = new Date();
+
+      if (listing.trackingCode) {
+        return "Tracking inserito. Ora puoi concludere la vendita.";
+      }
+
+      if (deadline.getTime() < now.getTime()) {
+        return "Scaduto: il venditore doveva spedire entro " + formatDate(deadlineIso) + ".";
+      }
+
+      return "Spedizione entro " + formatDate(deadlineIso) + " con tracking obbligatorio.";
+    }
+
     function sortListings(a, b) {
       const order = { available: 0, reserved: 1, sold: 2 };
       const statusA = order[a.status] ?? 9;
@@ -1089,36 +1183,203 @@
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     }
 
-    const loadedUsers = load(STORAGE_KEYS.users, []).map(normalizeUser);
-    const loadedListings = load(STORAGE_KEYS.listings, []).map(normalizeListing);
-    const loadedRequests = load(STORAGE_KEYS.requests, []).map(normalizeRequest);
-    const storedCurrentUser = load(STORAGE_KEYS.currentUser, null);
-
     let state = {
-      users: loadedUsers.length ? loadedUsers : seedUsers.map(normalizeUser),
+      users: [],
       currentUser: null,
-      listings: loadedListings.length ? loadedListings : seedListings.map(normalizeListing),
-      requests: loadedRequests,
+      listings: [],
+      requests: [],
       view: "board",
       profileTab: "dashboard",
       expandedSections: [],
       activeListingId: "",
-      requestMode: "offer"
+      requestMode: "offer",
+      syncMode: FIREBASE_ENABLED ? "firebase" : "local",
+      isHydrating: FIREBASE_ENABLED,
+      authResolved: !FIREBASE_ENABLED,
+      syncError: ""
     };
 
-    if (storedCurrentUser && storedCurrentUser.id) {
-      const matchingUser = state.users.find(user => user.id === storedCurrentUser.id);
-      state.currentUser = matchingUser || normalizeUser(storedCurrentUser);
-      if (!matchingUser) {
-        state.users.push(state.currentUser);
+    function isFirebaseMode() {
+      return state.syncMode === "firebase";
+    }
+
+    function getFriendlyAuthError(error) {
+      const code = String(error && error.code ? error.code : "");
+
+      return {
+        "auth/email-already-in-use": "Esiste gia un account con questa email.",
+        "auth/invalid-email": "Email non valida.",
+        "auth/weak-password": "Password troppo debole. Usa almeno 6 caratteri.",
+        "auth/invalid-credential": "Email o password non corretti.",
+        "auth/user-not-found": "Utente non trovato.",
+        "auth/wrong-password": "Password non corretta.",
+        "auth/operation-not-allowed": "Metodo di accesso non attivo in Firebase Authentication.",
+        "auth/operation-not-supported-in-this-environment": "Google login non disponibile qui. Apri il sito da localhost o da un dominio http/https.",
+        "auth/popup-closed-by-user": "Popup Google chiuso prima del completamento.",
+        "auth/popup-blocked": "Il browser ha bloccato il popup Google.",
+        "auth/cancelled-popup-request": "Richiesta popup Google annullata.",
+        "auth/unauthorized-domain": "Dominio non autorizzato in Firebase Authentication. Usa localhost o aggiungi il dominio nelle impostazioni.",
+        "auth/network-request-failed": "Richiesta Firebase fallita. Controlla connessione, browser e dominio.",
+        "permission-denied": "Permessi Firestore insufficienti per questa operazione."
+      }[code] || ("Errore Firebase" + (code ? " (" + code + ")" : "") + ".");
+    }
+
+    function setRemoteReady(key) {
+      remoteReady[key] = true;
+      state.isHydrating = !(remoteReady.users && remoteReady.listings && remoteReady.requests && remoteReady.auth);
+    }
+
+    function syncCurrentUserFromAuth(authUser) {
+      if (!authUser) {
+        state.currentUser = null;
+        return;
+      }
+
+      const existingUser = state.users.find(user => user.id === authUser.uid);
+      state.currentUser = normalizeUser(existingUser || {
+        id: authUser.uid,
+        name: authUser.displayName || authUser.email?.split("@")[0] || "Utente",
+        email: authUser.email || ""
+      });
+    }
+
+    function resetRemoteReady() {
+      remoteReady.users = false;
+      remoteReady.listings = false;
+      remoteReady.requests = false;
+      remoteReady.auth = false;
+      state.isHydrating = true;
+    }
+
+    function bootstrapLocalState() {
+      const loadedUsers = loadLocal(DEMO_STORAGE_KEYS.users, []).map(normalizeUser);
+      const loadedListings = loadLocal(DEMO_STORAGE_KEYS.listings, []).map(normalizeListing);
+      const loadedRequests = loadLocal(DEMO_STORAGE_KEYS.requests, []).map(normalizeRequest);
+      const storedCurrentUser = loadLocal(DEMO_STORAGE_KEYS.currentUser, null);
+
+      state.users = loadedUsers.length ? loadedUsers : seedUsers.map(normalizeUser);
+      state.listings = loadedListings.length ? loadedListings : seedListings.map(normalizeListing);
+      state.requests = loadedRequests;
+      state.syncMode = "local";
+      state.isHydrating = false;
+      state.authResolved = true;
+      state.syncError = "";
+
+      if (storedCurrentUser && storedCurrentUser.id) {
+        const matchingUser = state.users.find(user => user.id === storedCurrentUser.id);
+        state.currentUser = matchingUser || normalizeUser(storedCurrentUser);
+        if (!matchingUser) {
+          state.users.push(state.currentUser);
+        }
       }
     }
 
     function persist() {
-      save(STORAGE_KEYS.users, state.users);
-      save(STORAGE_KEYS.currentUser, state.currentUser);
-      save(STORAGE_KEYS.listings, state.listings);
-      save(STORAGE_KEYS.requests, state.requests);
+      if (isFirebaseMode()) {
+        return;
+      }
+
+      saveLocal(DEMO_STORAGE_KEYS.users, state.users);
+      saveLocal(DEMO_STORAGE_KEYS.currentUser, state.currentUser);
+      saveLocal(DEMO_STORAGE_KEYS.listings, state.listings);
+      saveLocal(DEMO_STORAGE_KEYS.requests, state.requests);
+    }
+
+    async function upsertRemoteUserProfile(user, preferredName = "", includeCreatedAt = false) {
+      if (!db || !user) {
+        return;
+      }
+
+      const payload = {
+        name: (preferredName || user.displayName || user.email?.split("@")[0] || "Utente").trim(),
+        email: String(user.email || "").toLowerCase()
+      };
+
+      if (includeCreatedAt) {
+        payload.createdAt = new Date().toISOString();
+      }
+
+      await db.collection(FIREBASE_COLLECTIONS.users).doc(user.uid).set(payload, { merge: true });
+    }
+
+    async function bootstrapFirebase() {
+      renderAll();
+
+      try {
+        firebaseApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth(firebaseApp);
+        db = firebase.firestore(firebaseApp);
+        googleProvider = new firebase.auth.GoogleAuthProvider();
+        resetRemoteReady();
+
+        remoteUnsubscribers.forEach(unsubscribe => unsubscribe());
+        remoteUnsubscribers = [];
+
+        remoteUnsubscribers.push(
+          db.collection(FIREBASE_COLLECTIONS.users).onSnapshot(snapshot => {
+            state.users = snapshot.docs.map(entry => normalizeUser({ id: entry.id, ...entry.data() }));
+            syncCurrentUserFromAuth(auth.currentUser);
+            setRemoteReady("users");
+            renderAll();
+          }, error => {
+            console.error(error);
+            state.syncError = getFriendlyAuthError(error);
+            setRemoteReady("users");
+            renderAll();
+          })
+        );
+
+        remoteUnsubscribers.push(
+          db.collection(FIREBASE_COLLECTIONS.listings).onSnapshot(snapshot => {
+            state.listings = snapshot.docs
+              .map(entry => normalizeListing({ id: entry.id, ...entry.data() }))
+              .sort(sortListings);
+            setRemoteReady("listings");
+            renderAll();
+          }, error => {
+            console.error(error);
+            state.syncError = getFriendlyAuthError(error);
+            setRemoteReady("listings");
+            renderAll();
+          })
+        );
+
+        remoteUnsubscribers.push(
+          db.collection(FIREBASE_COLLECTIONS.requests).onSnapshot(snapshot => {
+            state.requests = snapshot.docs
+              .map(entry => normalizeRequest({ id: entry.id, ...entry.data() }))
+              .sort(sortRequests);
+            setRemoteReady("requests");
+            renderAll();
+          }, error => {
+            console.error(error);
+            state.syncError = getFriendlyAuthError(error);
+            setRemoteReady("requests");
+            renderAll();
+          })
+        );
+
+        auth.onAuthStateChanged(async authUser => {
+          try {
+            if (authUser) {
+              await upsertRemoteUserProfile(authUser);
+            }
+          } catch (error) {
+            console.error(error);
+            state.syncError = getFriendlyAuthError(error);
+          }
+
+          syncCurrentUserFromAuth(authUser);
+          state.authResolved = true;
+          setRemoteReady("auth");
+          renderAll();
+        });
+      } catch (error) {
+        console.error(error);
+        state.syncError = "Firebase non inizializzato. Resto in modalita demo locale.";
+        bootstrapLocalState();
+        renderAll();
+      }
     }
 
     function openModal(id) {
@@ -1215,26 +1476,47 @@
       document.getElementById("profileView").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    function renderLoginSelect() {
-      const select = document.getElementById("loginSelect");
-      select.innerHTML = "";
+    function renderAuthModeNote() {
+      const authModeNote = document.getElementById("authModeNote");
+      const registerHint = document.getElementById("registerHint");
+      const loginHint = document.getElementById("loginHint");
+      const btnGoogleLogin = document.getElementById("btnGoogleLogin");
 
-      state.users.forEach(user => {
-        const option = document.createElement("option");
-        option.value = user.id;
-        option.textContent = user.name + " · " + user.email;
-        if (state.currentUser && state.currentUser.id === user.id) {
-          option.selected = true;
-        }
-        select.appendChild(option);
-      });
+      if (isFirebaseMode()) {
+        authModeNote.textContent = "Accesso Firebase con email e password. Gli annunci e le offerte saranno condivisi da tutti gli utenti.";
+        registerHint.textContent = "Password minima consigliata: 6 caratteri.";
+        loginHint.textContent = SUPPORTS_POPUP_AUTH
+          ? "Puoi entrare con email/password oppure con Google."
+          : "Google richiede localhost o un dominio online. Con file locale usa email/password oppure avvia un server locale.";
+        btnGoogleLogin.classList.toggle("hidden", !SUPPORTS_POPUP_AUTH);
+        return;
+      }
+
+      authModeNote.textContent = "Modalita demo locale. I dati restano solo in questo browser finche non compili firebase-config.js.";
+      registerHint.textContent = "Anche in demo la password viene richiesta, solo per simulare il flusso reale.";
+      loginHint.textContent = "Account demo: marco@beymarket.demo / demo1234";
+      btnGoogleLogin.classList.add("hidden");
+    }
+
+    function renderFooterNote() {
+      const footerNote = document.getElementById("footerNote");
+
+      if (state.syncError) {
+        footerNote.innerHTML = escapeHtml(state.syncError);
+        return;
+      }
+
+      if (isFirebaseMode()) {
+        footerNote.innerHTML = state.isHydrating
+          ? "Connessione a Firebase in corso..."
+          : "Sync Firebase attivo: annunci, offerte e profili sono condivisi tra tutti gli utenti.";
+        return;
+      }
+
+      footerNote.innerHTML = "Modalita demo locale. Per attivare il database condiviso compila <code>firebase-config.js</code>, abilita Email/Password e Firestore.";
     }
 
     function renderHeader() {
-      const currentUserLabel = document.getElementById("currentUserLabel");
-      if (currentUserLabel) {
-        currentUserLabel.textContent = state.currentUser ? state.currentUser.name : "Ospite";
-      }
       document.getElementById("btnLogout").classList.toggle("hidden", !state.currentUser);
       document.getElementById("btnAuth").textContent = state.currentUser ? state.currentUser.email : "Registrati / Accedi";
     }
@@ -1336,6 +1618,8 @@
               <div class="price">${formatPrice(listing.price)}</div>
             </div>
 
+            <div class="subtle">Commissione sito ${Math.round(MARKETPLACE_FEE_RATE * 100)}%: ${formatPrice(getMarketplaceFee(listing.price))}</div>
+
             <div class="listing-notes">${escapeHtml(listing.notes)}</div>
             <div class="subtle">${escapeHtml(ownerNote)}</div>
           </div>
@@ -1346,11 +1630,22 @@
     }
 
     function renderListings() {
+      const grid = document.getElementById("listingGrid");
+
+      if (state.isHydrating && isFirebaseMode() && !state.listings.length) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <strong>Caricamento annunci...</strong><br />
+            Sto sincronizzando la bacheca con Firebase.
+          </div>
+        `;
+        return;
+      }
+
       const q = document.getElementById("searchInput").value.trim().toLowerCase();
       const type = document.getElementById("filterType").value;
       const condition = document.getElementById("filterCondition").value;
       const status = document.getElementById("filterStatus").value;
-      const grid = document.getElementById("listingGrid");
 
       const filtered = state.listings
         .filter(listing => {
@@ -1437,21 +1732,39 @@
             const reservedText = closedRequest
               ? closedRequest.buyerName + " · " + formatPrice(closedRequest.amount)
               : "Nessuna trattativa attiva";
+            const shippingStatus = getShippingStatusText(listing);
 
             let actions = "";
+            let trackingBlock = "";
 
             if (listing.status === "reserved") {
               actions = `
-                <button class="btn-secondary" onclick="markSold('${listing.id}')">Segna venduto</button>
+                <button class="btn-secondary" onclick="markSold('${listing.id}')">Concludi vendita</button>
                 <button class="btn-ghost" onclick="reopenListing('${listing.id}')">Rimetti disponibile</button>
+              `;
+              trackingBlock = `
+                <div class="subtle" style="margin-top: 10px;">Commissione sito: ${formatPrice(getMarketplaceFee(closedRequest ? closedRequest.amount : listing.price))}</div>
+                <div class="subtle">Netto venditore: ${formatPrice(getSellerNet(closedRequest ? closedRequest.amount : listing.price))}</div>
+                <div class="subtle">${escapeHtml(shippingStatus)}</div>
+                <input id="tracking-${listing.id}" value="${escapeHtml(listing.trackingCode || "")}" placeholder="Inserisci codice tracking" style="margin-top: 12px;" />
+                <div class="inline-actions" style="margin-top: 10px;">
+                  <button class="btn-secondary" onclick="saveTracking('${listing.id}')">Salva tracking</button>
+                </div>
               `;
             } else if (listing.status === "sold") {
               actions = `
                 <button class="btn-ghost" onclick="reopenListing('${listing.id}')">Rimetti disponibile</button>
               `;
+              trackingBlock = `
+                <div class="subtle" style="margin-top: 10px;">Tracking: ${escapeHtml(listing.trackingCode || "Non inserito")}</div>
+              `;
             } else {
               actions = `
                 <button class="btn-ghost" onclick="jumpToBoard()">Vedi in bacheca</button>
+              `;
+              trackingBlock = `
+                <div class="subtle" style="margin-top: 10px;">Commissione sito: ${formatPrice(getMarketplaceFee(listing.price))}</div>
+                <div class="subtle">Netto venditore: ${formatPrice(getSellerNet(listing.price))}</div>
               `;
             }
 
@@ -1465,6 +1778,7 @@
                 <div style="margin-top: 12px;"><strong>${formatPrice(listing.price)}</strong></div>
                 <div class="subtle" style="margin-top: 10px;">Richieste aperte: ${pendingCount}</div>
                 <div class="subtle">Trattativa attiva: ${escapeHtml(reservedText)}</div>
+                ${trackingBlock}
                 <div class="inline-actions" style="margin-top: 14px;">${actions}</div>
               </div>
             `;
@@ -1502,11 +1816,11 @@
           `;
         } else if (mode === "outgoing" && request.status === "accepted") {
           footer = `
-            <div class="subtle">Il venditore ha accettato. L'annuncio risulta riservato per te.</div>
+            <div class="subtle">Il venditore ha accettato. L'annuncio risulta riservato per te e la spedizione deve partire entro ${SHIPPING_DEADLINE_DAYS} giorni con tracking obbligatorio.</div>
           `;
         } else if (mode === "incoming" && request.status === "accepted") {
           footer = `
-            <div class="subtle">Hai scelto questa richiesta per il pezzo.</div>
+            <div class="subtle">Hai scelto questa richiesta per il pezzo. Devi spedire entro ${SHIPPING_DEADLINE_DAYS} giorni e inserire il tracking.</div>
           `;
         }
 
@@ -1522,6 +1836,7 @@
                 <span class="chip">${escapeHtml(getRequestTypeLabel(request.type))}</span>
                 <span class="chip">${escapeHtml(mode === "incoming" ? request.buyerName : request.sellerName)}</span>
                 <span class="chip">${formatPrice(request.amount)}</span>
+                <span class="chip">Fee ${formatPrice(getMarketplaceFee(request.amount))}</span>
               </div>
 
               <div class="subtle">
@@ -1641,6 +1956,16 @@
     function renderProfile() {
       const root = document.getElementById("profileContent");
 
+      if (state.isHydrating && isFirebaseMode() && !state.authResolved) {
+        root.innerHTML = `
+          <div class="panel">
+            <h2>Connessione al profilo in corso</h2>
+            <p class="muted" style="margin-top: 10px;">Sto verificando la sessione Firebase e caricando i tuoi dati.</p>
+          </div>
+        `;
+        return;
+      }
+
       if (!state.currentUser) {
         root.innerHTML = `
           <div class="panel">
@@ -1750,60 +2075,148 @@
     function renderAll() {
       renderHeader();
       renderStats();
-      renderLoginSelect();
+      renderAuthModeNote();
+      renderFooterNote();
       renderListings();
       renderProfile();
       setView(state.view);
       persist();
     }
 
-    function registerUser() {
+    async function registerUser() {
       const name = document.getElementById("regName").value.trim();
       const email = document.getElementById("regEmail").value.trim().toLowerCase();
+      const password = document.getElementById("regPassword").value;
 
-      if (!name || !email) {
-        alert("Inserisci nome ed email.");
+      if (!name || !email || !password) {
+        alert("Inserisci nome, email e password.");
         return;
       }
 
-      if (state.users.some(user => user.email.toLowerCase() === email)) {
-        alert("Esiste gia un utente con questa email.");
+      if (password.length < 6) {
+        alert("La password deve avere almeno 6 caratteri.");
         return;
       }
 
-      const user = normalizeUser({ id: uid(), name, email });
-      state.users.push(user);
-      state.currentUser = user;
+      try {
+        if (isFirebaseMode()) {
+          const credential = await auth.createUserWithEmailAndPassword(email, password);
+          await credential.user.updateProfile({ displayName: name });
+          await upsertRemoteUserProfile(credential.user, name, true);
+          state.currentUser = normalizeUser({ id: credential.user.uid, name, email });
+        } else {
+          if (state.users.some(user => user.email === email)) {
+            alert("Esiste gia un utente con questa email.");
+            return;
+          }
 
-      document.getElementById("regName").value = "";
-      document.getElementById("regEmail").value = "";
+          const user = normalizeUser({ id: uid(), name, email, password });
+          state.users.push(user);
+          state.currentUser = user;
+        }
 
-      closeModal("authModal");
-      state.view = "profile";
-      state.profileTab = "dashboard";
-      renderAll();
+        document.getElementById("regName").value = "";
+        document.getElementById("regEmail").value = "";
+        document.getElementById("regPassword").value = "";
+
+        closeModal("authModal");
+        state.view = "profile";
+        state.profileTab = "dashboard";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
-    function loginUser() {
-      const id = document.getElementById("loginSelect").value;
-      const user = state.users.find(item => item.id === id);
+    async function loginUser() {
+      const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+      const password = document.getElementById("loginPassword").value;
 
-      if (!user) {
-        alert("Seleziona un utente.");
+      if (!email || !password) {
+        alert("Inserisci email e password.");
         return;
       }
 
-      state.currentUser = user;
-      closeModal("authModal");
-      state.view = "profile";
-      state.profileTab = "dashboard";
-      renderAll();
+      try {
+        if (isFirebaseMode()) {
+          const credential = await auth.signInWithEmailAndPassword(email, password);
+          state.currentUser = normalizeUser({
+            id: credential.user.uid,
+            name: credential.user.displayName || email.split("@")[0],
+            email
+          });
+        } else {
+          const user = state.users.find(item => item.email === email && (!item.password || item.password === password));
+
+          if (!user) {
+            alert("Email o password non corretti.");
+            return;
+          }
+
+          state.currentUser = user;
+        }
+
+        document.getElementById("loginEmail").value = "";
+        document.getElementById("loginPassword").value = "";
+
+        closeModal("authModal");
+        state.view = "profile";
+        state.profileTab = "dashboard";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
-    function logoutUser() {
-      state.currentUser = null;
-      state.view = "board";
-      renderAll();
+    async function loginWithGoogle() {
+      if (!isFirebaseMode()) {
+        alert("Il login Google e disponibile solo con Firebase attivo.");
+        return;
+      }
+
+      if (!SUPPORTS_POPUP_AUTH) {
+        alert("Google login richiede localhost o un dominio online. Non funziona se apri il file direttamente dal browser.");
+        return;
+      }
+
+      try {
+        const credential = await auth.signInWithPopup(googleProvider);
+        const user = credential.user;
+
+        await upsertRemoteUserProfile(user, user.displayName || user.email?.split("@")[0] || "Utente", true);
+
+        state.currentUser = normalizeUser({
+          id: user.uid,
+          name: user.displayName || user.email?.split("@")[0] || "Utente",
+          email: user.email || ""
+        });
+
+        closeModal("authModal");
+        state.view = "profile";
+        state.profileTab = "dashboard";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
+    }
+
+    async function logoutUser() {
+      try {
+        if (isFirebaseMode()) {
+          await auth.signOut();
+        } else {
+          state.currentUser = null;
+        }
+
+        state.view = "board";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
     function fillExample() {
@@ -1818,7 +2231,7 @@
       document.getElementById("listingNotes").value = "Buon pezzo per gioco, usura leggera sulla punta.";
     }
 
-    function createListing() {
+    async function createListing() {
       if (!state.currentUser) {
         openModal("authModal");
         return;
@@ -1843,7 +2256,7 @@
         return;
       }
 
-      state.listings.unshift(normalizeListing({
+      const listing = normalizeListing({
         id: uid(),
         title,
         brand,
@@ -1858,22 +2271,35 @@
         status: "available",
         createdAt: new Date().toISOString(),
         reservedFor: "",
-        closedRequestId: ""
-      }));
+        closedRequestId: "",
+        acceptedAt: "",
+        trackingCode: ""
+      });
 
-      document.getElementById("listingTitle").value = "";
-      document.getElementById("listingBrand").value = "";
-      document.getElementById("listingType").value = "Beyblade";
-      document.getElementById("listingBeyCode").value = "";
-      document.getElementById("listingColor").value = "";
-      document.getElementById("listingPrice").value = "";
-      document.getElementById("listingNotes").value = "";
-      toggleBeyCodeField();
+      try {
+        if (isFirebaseMode()) {
+          await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).set(listing);
+        } else {
+          state.listings.unshift(listing);
+        }
 
-      closeModal("listingModal");
-      state.view = "profile";
-      state.profileTab = "listings";
-      renderAll();
+        document.getElementById("listingTitle").value = "";
+        document.getElementById("listingBrand").value = "";
+        document.getElementById("listingType").value = "Beyblade";
+        document.getElementById("listingBeyCode").value = "";
+        document.getElementById("listingColor").value = "";
+        document.getElementById("listingPrice").value = "";
+        document.getElementById("listingNotes").value = "";
+        toggleBeyCodeField();
+
+        closeModal("listingModal");
+        state.view = "profile";
+        state.profileTab = "listings";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
     function openRequestModal(listingId, mode) {
@@ -1931,7 +2357,7 @@
       openModal("requestModal");
     }
 
-    function submitRequest() {
+    async function submitRequest() {
       if (!state.currentUser || !state.activeListingId) {
         return;
       }
@@ -1964,7 +2390,7 @@
         return;
       }
 
-      state.requests.unshift(normalizeRequest({
+      const request = normalizeRequest({
         id: uid(),
         listingId: listing.id,
         listingTitle: listing.title,
@@ -1978,15 +2404,26 @@
         status: "pending",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }));
+      });
 
-      closeModal("requestModal");
-      state.view = "profile";
-      state.profileTab = "outgoing";
-      renderAll();
+      try {
+        if (isFirebaseMode()) {
+          await db.collection(FIREBASE_COLLECTIONS.requests).doc(request.id).set(request);
+        } else {
+          state.requests.unshift(request);
+        }
+
+        closeModal("requestModal");
+        state.view = "profile";
+        state.profileTab = "outgoing";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
-    function decideRequest(requestId, decision) {
+    async function decideRequest(requestId, decision) {
       if (!state.currentUser) {
         return;
       }
@@ -2001,28 +2438,67 @@
         return;
       }
 
-      request.status = decision;
-      request.updatedAt = new Date().toISOString();
+      const now = new Date().toISOString();
 
-      if (decision === "accepted") {
-        listing.status = "reserved";
-        listing.reservedFor = request.buyerId;
-        listing.closedRequestId = request.id;
+      try {
+        if (isFirebaseMode()) {
+          await db.collection(FIREBASE_COLLECTIONS.requests).doc(request.id).update({
+            status: decision,
+            updatedAt: now
+          });
 
-        state.requests.forEach(item => {
-          if (item.listingId === listing.id && item.id !== request.id && item.status === "pending") {
-            item.status = "closed";
-            item.updatedAt = new Date().toISOString();
+          if (decision === "accepted") {
+            await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).update({
+              status: "reserved",
+              reservedFor: request.buyerId,
+              closedRequestId: request.id,
+              acceptedAt: now,
+              trackingCode: ""
+            });
+
+            const otherPendingRequests = state.requests.filter(item =>
+              item.listingId === listing.id &&
+              item.id !== request.id &&
+              item.status === "pending"
+            );
+
+            await Promise.all(otherPendingRequests.map(item =>
+              db.collection(FIREBASE_COLLECTIONS.requests).doc(item.id).update({
+                status: "closed",
+                updatedAt: now
+              })
+            ));
           }
-        });
-      }
+        } else {
+          request.status = decision;
+          request.updatedAt = now;
 
-      state.view = "profile";
-      state.profileTab = "incoming";
-      renderAll();
+          if (decision === "accepted") {
+            listing.status = "reserved";
+            listing.reservedFor = request.buyerId;
+            listing.closedRequestId = request.id;
+            listing.acceptedAt = now;
+            listing.trackingCode = "";
+
+            state.requests.forEach(item => {
+              if (item.listingId === listing.id && item.id !== request.id && item.status === "pending") {
+                item.status = "closed";
+                item.updatedAt = now;
+              }
+            });
+          }
+        }
+
+        state.view = "profile";
+        state.profileTab = "incoming";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
-    function markSold(listingId) {
+    async function saveTracking(listingId) {
       if (!state.currentUser) {
         return;
       }
@@ -2032,22 +2508,29 @@
         return;
       }
 
-      listing.status = "sold";
+      const input = document.getElementById("tracking-" + listing.id);
+      const trackingCode = input ? input.value.trim() : "";
 
-      if (listing.closedRequestId) {
-        const request = state.requests.find(item => item.id === listing.closedRequestId);
-        if (request) {
-          request.status = "completed";
-          request.updatedAt = new Date().toISOString();
-        }
+      if (!trackingCode) {
+        alert("Il tracking e obbligatorio.");
+        return;
       }
 
-      state.view = "profile";
-      state.profileTab = "listings";
-      renderAll();
+      try {
+        if (isFirebaseMode()) {
+          await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).update({ trackingCode });
+        } else {
+          listing.trackingCode = trackingCode;
+        }
+
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
-    function reopenListing(listingId) {
+    async function markSold(listingId) {
       if (!state.currentUser) {
         return;
       }
@@ -2057,21 +2540,100 @@
         return;
       }
 
-      if (listing.closedRequestId) {
-        const request = state.requests.find(item => item.id === listing.closedRequestId);
-        if (request && ["accepted", "completed"].includes(request.status)) {
-          request.status = "cancelled";
-          request.updatedAt = new Date().toISOString();
-        }
+      if (!listing.trackingCode) {
+        alert("Prima di concludere la vendita devi inserire il tracking.");
+        return;
       }
 
-      listing.status = "available";
-      listing.reservedFor = "";
-      listing.closedRequestId = "";
+      const now = new Date().toISOString();
 
-      state.view = "profile";
-      state.profileTab = "listings";
-      renderAll();
+      try {
+        if (isFirebaseMode()) {
+          await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).update({
+            status: "sold"
+          });
+
+          if (listing.closedRequestId) {
+            await db.collection(FIREBASE_COLLECTIONS.requests).doc(listing.closedRequestId).update({
+              status: "completed",
+              updatedAt: now
+            });
+          }
+        } else {
+          listing.status = "sold";
+
+          if (listing.closedRequestId) {
+            const request = state.requests.find(item => item.id === listing.closedRequestId);
+            if (request) {
+              request.status = "completed";
+              request.updatedAt = now;
+            }
+          }
+        }
+
+        state.view = "profile";
+        state.profileTab = "listings";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
+    }
+
+    async function reopenListing(listingId) {
+      if (!state.currentUser) {
+        return;
+      }
+
+      const listing = state.listings.find(item => item.id === listingId);
+      if (!listing || listing.ownerId !== state.currentUser.id) {
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      try {
+        if (isFirebaseMode()) {
+          if (listing.closedRequestId) {
+            const request = state.requests.find(item => item.id === listing.closedRequestId);
+            if (request && ["accepted", "completed"].includes(request.status)) {
+              await db.collection(FIREBASE_COLLECTIONS.requests).doc(request.id).update({
+                status: "cancelled",
+                updatedAt: now
+              });
+            }
+          }
+
+          await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).update({
+            status: "available",
+            reservedFor: "",
+            closedRequestId: "",
+            acceptedAt: "",
+            trackingCode: ""
+          });
+        } else {
+          if (listing.closedRequestId) {
+            const request = state.requests.find(item => item.id === listing.closedRequestId);
+            if (request && ["accepted", "completed"].includes(request.status)) {
+              request.status = "cancelled";
+              request.updatedAt = now;
+            }
+          }
+
+          listing.status = "available";
+          listing.reservedFor = "";
+          listing.closedRequestId = "";
+          listing.acceptedAt = "";
+          listing.trackingCode = "";
+        }
+
+        state.view = "profile";
+        state.profileTab = "listings";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
     }
 
     document.getElementById("btnAuth").addEventListener("click", () => openModal("authModal"));
@@ -2106,9 +2668,41 @@
       });
     });
 
+    Object.assign(window, {
+      openModal,
+      closeModal,
+      registerUser,
+      loginUser,
+      loginWithGoogle,
+      logoutUser,
+      fillExample,
+      createListing,
+      submitRequest,
+      setProfileTab,
+      jumpToBoard,
+      startSelling,
+      openRequestModal,
+      toggleBoardSection,
+      markSold,
+      reopenListing,
+      saveTracking,
+      decideRequest
+    });
+
     toggleBeyCodeField();
     updateSearchToggleLabel();
-    renderAll();
+
+    async function bootstrapApp() {
+      if (FIREBASE_ENABLED) {
+        await bootstrapFirebase();
+        return;
+      }
+
+      bootstrapLocalState();
+      renderAll();
+    }
+
+    bootstrapApp();
   </script>
 </body>
 </html>
