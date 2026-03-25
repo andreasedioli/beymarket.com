@@ -763,8 +763,8 @@
     <div class="modal-card">
       <div class="between">
         <div>
-          <h3>Nuovo annuncio</h3>
-          <div class="subtle">Il pezzo comparira nella bacheca generale e nel tuo profilo.</div>
+          <h3 id="listingModalTitle">Nuovo annuncio</h3>
+          <div id="listingModalSub" class="subtle">Il pezzo comparira nella bacheca generale e nel tuo profilo.</div>
         </div>
         <button class="btn-ghost" onclick="closeModal('listingModal')">Chiudi</button>
       </div>
@@ -814,7 +814,7 @@
 
       <div class="inline-actions" style="margin-top: 14px;">
         <button class="btn-secondary" onclick="fillExample()">Compila esempio</button>
-        <button class="btn" onclick="createListing()">Pubblica annuncio</button>
+        <button id="listingSubmitButton" class="btn" onclick="createListing()">Pubblica annuncio</button>
       </div>
     </div>
   </div>
@@ -1201,6 +1201,7 @@
       activeListingId: "",
       requestMode: "offer",
       lastCreatedListingId: "",
+      editingListingId: "",
       syncMode: FIREBASE_ENABLED ? "firebase" : "local",
       isHydrating: FIREBASE_ENABLED,
       authResolved: !FIREBASE_ENABLED,
@@ -1487,7 +1488,64 @@
     }
 
     function closeModal(id) {
+      if (id === "listingModal") {
+        resetListingForm();
+      }
       document.getElementById(id).classList.remove("open");
+    }
+
+    function updateListingModalMode() {
+      const isEditing = Boolean(state.editingListingId);
+      document.getElementById("listingModalTitle").textContent = isEditing ? "Modifica annuncio" : "Nuovo annuncio";
+      document.getElementById("listingModalSub").textContent = isEditing
+        ? "Puoi aggiornare il tuo annuncio finche e disponibile."
+        : "Il pezzo comparira nella bacheca generale e nel tuo profilo.";
+      document.getElementById("listingSubmitButton").textContent = isEditing ? "Salva modifiche" : "Pubblica annuncio";
+    }
+
+    function resetListingForm() {
+      state.editingListingId = "";
+      document.getElementById("listingTitle").value = "";
+      document.getElementById("listingBrand").value = "";
+      document.getElementById("listingType").value = "Beyblade";
+      document.getElementById("listingCondition").value = "Nuovo";
+      document.getElementById("listingBeyCode").value = "";
+      document.getElementById("listingColor").value = "";
+      document.getElementById("listingPrice").value = "";
+      document.getElementById("listingNotes").value = "";
+      toggleBeyCodeField();
+      updateListingModalMode();
+    }
+
+    function openEditListingModal(listingId) {
+      if (!state.currentUser) {
+        openModal("authModal");
+        return;
+      }
+
+      const listing = state.listings.find(item => item.id === listingId);
+
+      if (!listing || listing.ownerId !== state.currentUser.id) {
+        return;
+      }
+
+      if (listing.status !== "available") {
+        alert("Puoi modificare solo annunci ancora disponibili.");
+        return;
+      }
+
+      state.editingListingId = listing.id;
+      document.getElementById("listingTitle").value = listing.title;
+      document.getElementById("listingBrand").value = listing.brand;
+      document.getElementById("listingType").value = listing.type;
+      document.getElementById("listingCondition").value = listing.condition;
+      document.getElementById("listingBeyCode").value = listing.beyCode || "";
+      document.getElementById("listingColor").value = listing.color;
+      document.getElementById("listingPrice").value = String(listing.price);
+      document.getElementById("listingNotes").value = listing.notes;
+      toggleBeyCodeField();
+      updateListingModalMode();
+      openModal("listingModal");
     }
 
     function toggleBeyCodeField() {
@@ -1877,6 +1935,8 @@
               `;
             } else {
               actions = `
+                <button class="btn-secondary" onclick="openEditListingModal('${listing.id}')">Modifica</button>
+                <button class="btn-danger" onclick="deleteListing('${listing.id}')">Elimina</button>
                 <button class="btn-ghost" onclick="jumpToBoard()">Vedi in bacheca</button>
               `;
               trackingBlock = `
@@ -2373,8 +2433,20 @@
         return;
       }
 
+      const existingListing = state.editingListingId
+        ? state.listings.find(item => item.id === state.editingListingId)
+        : null;
+
+      if (state.editingListingId && (!existingListing || existingListing.ownerId !== state.currentUser.id || existingListing.status !== "available")) {
+        alert("Questo annuncio non puo piu essere modificato.");
+        resetListingForm();
+        closeModal("listingModal");
+        renderAll();
+        return;
+      }
+
       const listing = normalizeListing({
-        id: uid(),
+        id: existingListing ? existingListing.id : uid(),
         title,
         brand,
         type,
@@ -2385,34 +2457,86 @@
         notes,
         ownerId: state.currentUser.id,
         ownerName: state.currentUser.name,
-        status: "available",
-        createdAt: new Date().toISOString(),
-        reservedFor: "",
-        closedRequestId: "",
-        acceptedAt: "",
-        trackingCode: ""
+        status: existingListing ? existingListing.status : "available",
+        createdAt: existingListing ? existingListing.createdAt : new Date().toISOString(),
+        reservedFor: existingListing ? existingListing.reservedFor : "",
+        closedRequestId: existingListing ? existingListing.closedRequestId : "",
+        acceptedAt: existingListing ? existingListing.acceptedAt : "",
+        trackingCode: existingListing ? existingListing.trackingCode : ""
       });
 
       try {
         if (isFirebaseMode()) {
           await db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id).set(listing);
         } else {
-          state.listings.unshift(listing);
+          if (existingListing) {
+            state.listings = state.listings.map(item => item.id === listing.id ? listing : item);
+          } else {
+            state.listings.unshift(listing);
+          }
         }
-
-        document.getElementById("listingTitle").value = "";
-        document.getElementById("listingBrand").value = "";
-        document.getElementById("listingType").value = "Beyblade";
-        document.getElementById("listingBeyCode").value = "";
-        document.getElementById("listingColor").value = "";
-        document.getElementById("listingPrice").value = "";
-        document.getElementById("listingNotes").value = "";
-        toggleBeyCodeField();
 
         closeModal("listingModal");
         revealListingInBoard(listing);
         renderAll();
         document.getElementById("boardView").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        console.error(error);
+        alert(getFriendlyAuthError(error));
+      }
+    }
+
+    async function deleteListing(listingId) {
+      if (!state.currentUser) {
+        return;
+      }
+
+      const listing = state.listings.find(item => item.id === listingId);
+
+      if (!listing || listing.ownerId !== state.currentUser.id) {
+        return;
+      }
+
+      if (listing.status !== "available") {
+        alert("Puoi eliminare solo annunci ancora disponibili.");
+        return;
+      }
+
+      const confirmed = window.confirm("Vuoi eliminare questo annuncio? Le richieste ancora aperte verranno annullate.");
+      if (!confirmed) {
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const relatedRequests = state.requests.filter(request =>
+        request.listingId === listing.id && request.status === "pending"
+      );
+
+      try {
+        if (isFirebaseMode()) {
+          const batch = db.batch();
+          batch.delete(db.collection(FIREBASE_COLLECTIONS.listings).doc(listing.id));
+
+          relatedRequests.forEach(request => {
+            batch.update(db.collection(FIREBASE_COLLECTIONS.requests).doc(request.id), {
+              status: "cancelled",
+              updatedAt: now
+            });
+          });
+
+          await batch.commit();
+        } else {
+          state.listings = state.listings.filter(item => item.id !== listing.id);
+          state.requests = state.requests.map(request => {
+            if (request.listingId === listing.id && request.status === "pending") {
+              return { ...request, status: "cancelled", updatedAt: now };
+            }
+            return request;
+          });
+        }
+
+        state.profileTab = "listings";
+        renderAll();
       } catch (error) {
         console.error(error);
         alert(getFriendlyAuthError(error));
@@ -2794,6 +2918,8 @@
       logoutUser,
       fillExample,
       createListing,
+      openEditListingModal,
+      deleteListing,
       submitRequest,
       setProfileTab,
       jumpToBoard,
@@ -2806,7 +2932,7 @@
       decideRequest
     });
 
-    toggleBeyCodeField();
+    resetListingForm();
     updateSearchToggleLabel();
 
     async function bootstrapApp() {
