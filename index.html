@@ -397,6 +397,11 @@
       min-height: auto;
     }
 
+    .listing-card-new {
+      border-color: var(--green);
+      box-shadow: 0 0 0 2px rgba(94, 234, 132, 0.28);
+    }
+
     .listing-top {
       padding: 18px;
       background: #f3f3f3;
@@ -972,6 +977,8 @@
     let db = null;
     let googleProvider = null;
     let remoteUnsubscribers = [];
+    let profileUnsubscriber = null;
+    let requestUnsubscribers = [];
     const remoteReady = {
       users: false,
       listings: false,
@@ -1193,6 +1200,7 @@
       expandedSections: [],
       activeListingId: "",
       requestMode: "offer",
+      lastCreatedListingId: "",
       syncMode: FIREBASE_ENABLED ? "firebase" : "local",
       isHydrating: FIREBASE_ENABLED,
       authResolved: !FIREBASE_ENABLED,
@@ -1235,7 +1243,10 @@
         return;
       }
 
-      const existingUser = state.users.find(user => user.id === authUser.uid);
+      const existingUser = state.currentUser && state.currentUser.id === authUser.uid
+        ? state.currentUser
+        : state.users.find(user => user.id === authUser.uid);
+
       state.currentUser = normalizeUser(existingUser || {
         id: authUser.uid,
         name: authUser.displayName || authUser.email?.split("@")[0] || "Utente",
@@ -1244,11 +1255,125 @@
     }
 
     function resetRemoteReady() {
-      remoteReady.users = false;
+      remoteReady.users = true;
       remoteReady.listings = false;
-      remoteReady.requests = false;
+      remoteReady.requests = true;
       remoteReady.auth = false;
       state.isHydrating = true;
+    }
+
+    function stopProfileListener() {
+      if (profileUnsubscriber) {
+        profileUnsubscriber();
+        profileUnsubscriber = null;
+      }
+    }
+
+    function stopRequestListeners() {
+      requestUnsubscribers.forEach(unsubscribe => unsubscribe());
+      requestUnsubscribers = [];
+    }
+
+    function subscribeRemoteUserProfile(authUser) {
+      stopProfileListener();
+
+      if (!authUser) {
+        state.users = [];
+        state.currentUser = null;
+        setRemoteReady("users");
+        renderAll();
+        return;
+      }
+
+      remoteReady.users = false;
+      state.isHydrating = true;
+
+      profileUnsubscriber = db.collection(FIREBASE_COLLECTIONS.users).doc(authUser.uid).onSnapshot(snapshot => {
+        const profileData = snapshot.exists
+          ? normalizeUser({ id: snapshot.id, ...snapshot.data() })
+          : normalizeUser({
+            id: authUser.uid,
+            name: authUser.displayName || authUser.email?.split("@")[0] || "Utente",
+            email: authUser.email || ""
+          });
+
+        state.users = [profileData];
+        state.currentUser = profileData;
+        setRemoteReady("users");
+        renderAll();
+      }, error => {
+        console.error(error);
+        state.syncError = getFriendlyAuthError(error);
+        setRemoteReady("users");
+        renderAll();
+      });
+    }
+
+    function subscribeRemoteRequests(userId) {
+      stopRequestListeners();
+
+      if (!userId) {
+        state.requests = [];
+        setRemoteReady("requests");
+        renderAll();
+        return;
+      }
+
+      remoteReady.requests = false;
+      state.isHydrating = true;
+
+      let sellerRequests = [];
+      let buyerRequests = [];
+      let sellerReady = false;
+      let buyerReady = false;
+
+      function mergeAndRender() {
+        const merged = new Map();
+
+        [...sellerRequests, ...buyerRequests].forEach(request => {
+          merged.set(request.id, request);
+        });
+
+        state.requests = Array.from(merged.values()).sort(sortRequests);
+
+        if (sellerReady && buyerReady) {
+          setRemoteReady("requests");
+        }
+
+        renderAll();
+      }
+
+      requestUnsubscribers.push(
+        db.collection(FIREBASE_COLLECTIONS.requests).where("sellerId", "==", userId).onSnapshot(snapshot => {
+          sellerRequests = snapshot.docs.map(entry => normalizeRequest({ id: entry.id, ...entry.data() }));
+          sellerReady = true;
+          mergeAndRender();
+        }, error => {
+          console.error(error);
+          state.syncError = getFriendlyAuthError(error);
+          sellerReady = true;
+          if (buyerReady) {
+            setRemoteReady("requests");
+          }
+          renderAll();
+        })
+      );
+
+      requestUnsubscribers.push(
+        db.collection(FIREBASE_COLLECTIONS.requests).where("buyerId", "==", userId).onSnapshot(snapshot => {
+          buyerRequests = snapshot.docs.map(entry => normalizeRequest({ id: entry.id, ...entry.data() }));
+          buyerReady = true;
+          mergeAndRender();
+        }, error => {
+          console.error(error);
+          state.syncError = getFriendlyAuthError(error);
+          buyerReady = true;
+          if (sellerReady) {
+            setRemoteReady("requests");
+          }
+          renderAll();
+        })
+      );
     }
 
     function bootstrapLocalState() {
@@ -1314,20 +1439,8 @@
 
         remoteUnsubscribers.forEach(unsubscribe => unsubscribe());
         remoteUnsubscribers = [];
-
-        remoteUnsubscribers.push(
-          db.collection(FIREBASE_COLLECTIONS.users).onSnapshot(snapshot => {
-            state.users = snapshot.docs.map(entry => normalizeUser({ id: entry.id, ...entry.data() }));
-            syncCurrentUserFromAuth(auth.currentUser);
-            setRemoteReady("users");
-            renderAll();
-          }, error => {
-            console.error(error);
-            state.syncError = getFriendlyAuthError(error);
-            setRemoteReady("users");
-            renderAll();
-          })
-        );
+        stopProfileListener();
+        stopRequestListeners();
 
         remoteUnsubscribers.push(
           db.collection(FIREBASE_COLLECTIONS.listings).onSnapshot(snapshot => {
@@ -1344,21 +1457,6 @@
           })
         );
 
-        remoteUnsubscribers.push(
-          db.collection(FIREBASE_COLLECTIONS.requests).onSnapshot(snapshot => {
-            state.requests = snapshot.docs
-              .map(entry => normalizeRequest({ id: entry.id, ...entry.data() }))
-              .sort(sortRequests);
-            setRemoteReady("requests");
-            renderAll();
-          }, error => {
-            console.error(error);
-            state.syncError = getFriendlyAuthError(error);
-            setRemoteReady("requests");
-            renderAll();
-          })
-        );
-
         auth.onAuthStateChanged(async authUser => {
           try {
             if (authUser) {
@@ -1370,6 +1468,8 @@
           }
 
           syncCurrentUserFromAuth(authUser);
+          subscribeRemoteUserProfile(authUser);
+          subscribeRemoteRequests(authUser ? authUser.uid : "");
           state.authResolved = true;
           setRemoteReady("auth");
           renderAll();
@@ -1408,11 +1508,15 @@
       updateSearchToggleLabel();
     }
 
-    function resetSearchPanel() {
+    function clearBoardFilters() {
       document.getElementById("searchInput").value = "";
       document.getElementById("filterType").value = "";
       document.getElementById("filterCondition").value = "";
       document.getElementById("filterStatus").value = "";
+    }
+
+    function resetSearchPanel() {
+      clearBoardFilters();
       renderListings();
     }
 
@@ -1555,11 +1659,21 @@
       return listing.closedRequestId ? state.requests.find(request => request.id === listing.closedRequestId) : null;
     }
 
+    function revealListingInBoard(listing) {
+      clearBoardFilters();
+      document.getElementById("searchPanel").classList.add("hidden");
+      updateSearchToggleLabel();
+      state.expandedSections = [listing.type];
+      state.lastCreatedListingId = listing.id;
+      state.view = "board";
+    }
+
     function renderListingCard(listing) {
       const listingMeta = getListingStatusMeta(listing.status);
       const isOwner = state.currentUser && state.currentUser.id === listing.ownerId;
       const pendingCount = getPendingCountForListing(listing.id);
       const closedRequest = getClosedRequest(listing);
+      const isNewListing = state.lastCreatedListingId === listing.id;
       const listingLabel = listing.type === "Beyblade" && listing.beyCode
         ? listing.type + " · " + listing.beyCode
         : listing.type;
@@ -1594,10 +1708,13 @@
       }
 
       return `
-        <article class="listing-card">
+        <article class="listing-card ${isNewListing ? "listing-card-new" : ""}">
           <div class="listing-top">
             <div class="meta-row">
-              <span class="badge ${listingMeta.className}">${listingMeta.label}</span>
+              <div class="chips">
+                <span class="badge ${listingMeta.className}">${listingMeta.label}</span>
+                ${isNewListing ? `<span class="badge status-accepted">Appena pubblicato</span>` : ""}
+              </div>
               <span class="subtle">${formatDate(listing.createdAt)}</span>
             </div>
             <h3>${escapeHtml(listing.title)}</h3>
@@ -2293,9 +2410,9 @@
         toggleBeyCodeField();
 
         closeModal("listingModal");
-        state.view = "profile";
-        state.profileTab = "listings";
+        revealListingInBoard(listing);
         renderAll();
+        document.getElementById("boardView").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) {
         console.error(error);
         alert(getFriendlyAuthError(error));
