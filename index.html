@@ -1212,6 +1212,32 @@
       return state.syncMode === "firebase";
     }
 
+    function getFirebaseAuthUser() {
+      return isFirebaseMode() && auth ? auth.currentUser : null;
+    }
+
+    function getCurrentActorId() {
+      const authUser = getFirebaseAuthUser();
+      return authUser ? authUser.uid : (state.currentUser ? state.currentUser.id : "");
+    }
+
+    function getCurrentActorName() {
+      const authUser = getFirebaseAuthUser();
+      if (authUser && authUser.displayName) {
+        return authUser.displayName;
+      }
+
+      if (state.currentUser && state.currentUser.name) {
+        return state.currentUser.name;
+      }
+
+      if (authUser && authUser.email) {
+        return authUser.email.split("@")[0];
+      }
+
+      return "Utente";
+    }
+
     function getFriendlyAuthError(error) {
       const code = String(error && error.code ? error.code : "");
 
@@ -1744,10 +1770,17 @@
       let actions = "";
 
       if (isOwner) {
-        actions = `
-          <button class="btn-secondary" onclick="setProfileTab('listings')">I miei annunci</button>
-          <button class="btn-ghost" onclick="setProfileTab('incoming')">Richieste ricevute</button>
-        `;
+        if (listing.status === "available") {
+          actions = `
+            <button class="btn-secondary" onclick="openEditListingModal('${listing.id}')">Modifica annuncio</button>
+            <button class="btn-danger" onclick="deleteListing('${listing.id}')">Elimina annuncio</button>
+          `;
+        } else {
+          actions = `
+            <button class="btn-secondary" onclick="setProfileTab('listings')">I miei annunci</button>
+            <button class="btn-ghost" onclick="setProfileTab('incoming')">Richieste ricevute</button>
+          `;
+        }
       } else if (listing.status === "available") {
         actions = `
           <button class="btn" onclick="openRequestModal('${listing.id}', 'purchase')">Acquista pezzo</button>
@@ -1940,6 +1973,7 @@
                 <button class="btn-ghost" onclick="jumpToBoard()">Vedi in bacheca</button>
               `;
               trackingBlock = `
+                <div class="subtle" style="margin-top: 10px;">Gestione annuncio: puoi modificarlo o eliminarlo finche resta disponibile.</div>
                 <div class="subtle" style="margin-top: 10px;">Commissione sito: ${formatPrice(getMarketplaceFee(listing.price))}</div>
                 <div class="subtle">Netto venditore: ${formatPrice(getSellerNet(listing.price))}</div>
               `;
@@ -2414,6 +2448,11 @@
         return;
       }
 
+      if (isFirebaseMode() && !getFirebaseAuthUser()) {
+        alert("Sessione Firebase non pronta. Esci e rientra, poi riprova.");
+        return;
+      }
+
       const title = document.getElementById("listingTitle").value.trim();
       const brand = document.getElementById("listingBrand").value.trim();
       const type = document.getElementById("listingType").value;
@@ -2433,11 +2472,19 @@
         return;
       }
 
+      const actorId = getCurrentActorId();
+      const actorName = getCurrentActorName();
+
+      if (!actorId) {
+        alert("Utente non riconosciuto. Ricarica la pagina e accedi di nuovo.");
+        return;
+      }
+
       const existingListing = state.editingListingId
         ? state.listings.find(item => item.id === state.editingListingId)
         : null;
 
-      if (state.editingListingId && (!existingListing || existingListing.ownerId !== state.currentUser.id || existingListing.status !== "available")) {
+      if (state.editingListingId && (!existingListing || existingListing.ownerId !== actorId || existingListing.status !== "available")) {
         alert("Questo annuncio non puo piu essere modificato.");
         resetListingForm();
         closeModal("listingModal");
@@ -2455,8 +2502,8 @@
         color,
         price,
         notes,
-        ownerId: state.currentUser.id,
-        ownerName: state.currentUser.name,
+        ownerId: actorId,
+        ownerName: actorName,
         status: existingListing ? existingListing.status : "available",
         createdAt: existingListing ? existingListing.createdAt : new Date().toISOString(),
         reservedFor: existingListing ? existingListing.reservedFor : "",
