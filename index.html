@@ -1649,7 +1649,8 @@ function renderArchive() {
     const min = offers.length ? Math.min(...offers.map(o => o.price)) : "-";
 
     return `
-      <div class="panel" style="margin-bottom:12px; cursor:pointer">
+  <div class="panel" style="margin-bottom:12px; cursor:pointer"
+       onclick="openProductPage('${item.name}')">
 
         <strong>${item.name}</strong><br>
         <span class="muted">${item.type}</span><br>
@@ -3045,6 +3046,62 @@ document.getElementById("btnArchiveView").classList.toggle("active", view === "a
 
   renderArchive();
 });
+    function openProductPage(name) {
+
+  const item = BEY_DATABASE.find(b => b.name === name);
+
+  const offers = state.listings
+    .filter(l => l.title === name && l.status === "available")
+    .sort((a,b) => a.price - b.price);
+
+  const min = offers.length ? offers[0].price : "-";
+
+  document.getElementById("archiveContent").innerHTML = `
+    
+    <button class="btn-secondary" onclick="renderArchive()">⬅ Torna</button>
+
+    <div class="panel" style="margin-top:12px;">
+
+      <h2>${item.name}</h2>
+
+      <div class="muted">
+        Tipo: ${item.type} <br>
+        Release: ${item.release || "-"}
+      </div>
+
+      <div style="margin-top:10px;">
+        Offerte: ${offers.length} <br>
+        Prezzo minimo: €${min}
+      </div>
+
+    </div>
+
+    <div class="panel" style="margin-top:12px;">
+      <h3>Offerte</h3>
+
+      <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; padding:10px; font-weight:bold;">
+        <div>Venditore</div>
+        <div>Condizione</div>
+        <div>Prezzo</div>
+        <div></div>
+      </div>
+
+      ${offers.map(o => `
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; padding:10px; border-bottom:1px solid #333;">
+          <div>${o.ownerName}</div>
+          <div>${o.condition}</div>
+          <div>€${o.price}</div>
+          <div>
+            <button onclick="openRequestModal('${o.id}', 'purchase')">
+              Compra
+            </button>
+          </div>
+        </div>
+      `).join("")}
+
+    </div>
+  `;
+}
   </script>
 </body>
 </html>
