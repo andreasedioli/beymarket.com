@@ -976,7 +976,22 @@
         acceptedAt: ""
       }
     ];
-
+const BEY_DATABASE = [
+  {
+    name: "Dran Sword 3-60F",
+    type: "Beyblade",
+    release: "BX-01"
+  },
+  {
+    name: "Wizard Arrow 4-80B",
+    type: "Beyblade",
+    release: "BX-02"
+  },
+  {
+    name: "Taper Bit",
+    type: "Bit"
+  }
+];
     let firebaseApp = null;
     let auth = null;
     let db = null;
@@ -1625,7 +1640,28 @@
 
       renderListings();
     }
+function renderArchive() {
+  const root = document.getElementById("archiveContent");
 
+  root.innerHTML = BEY_DATABASE.map(item => {
+
+    const offers = state.listings.filter(l => l.title === item.name);
+    const min = offers.length ? Math.min(...offers.map(o => o.price)) : "-";
+
+    return `
+      <div class="panel" style="margin-bottom:12px; cursor:pointer">
+
+        <strong>${item.name}</strong><br>
+        <span class="muted">${item.type}</span><br>
+
+        <div class="muted">
+          Offerte: ${offers.length} | Prezzo min: €${min}
+        </div>
+
+      </div>
+    `;
+  }).join("");
+}
     function setView(view) {
       if (view === "profile" && !state.currentUser) {
         openModal("authModal");
