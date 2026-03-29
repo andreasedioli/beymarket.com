@@ -671,10 +671,11 @@
         <p>Marketplace demo per Beyblade X: bacheca pubblica, profilo personale, richieste di acquisto e offerte con approvazione del venditore.</p>
       </div>
 
-      <nav class="nav-panel">
-        <button id="btnBoardView" class="btn-secondary nav-pill active">Bacheca</button>
-        <button id="btnProfileView" class="btn-secondary nav-pill">Profilo</button>
-      </nav>
+     <nav class="nav-panel">
+  <button id="btnBoardView" class="btn-secondary nav-pill active">Bacheca</button>
+  <button id="btnArchiveView" class="btn-secondary nav-pill">Archivio</button>
+  <button id="btnProfileView" class="btn-secondary nav-pill">Profilo</button>
+</nav>
 
       <div class="account-panel">
         <button id="btnAuth" class="btn-secondary">Registrati / Accedi</button>
@@ -716,9 +717,13 @@
       <div id="listingGrid" class="listing-sections"></div>
     </section>
 
-    <section id="profileView" class="hidden">
-      <div id="profileContent"></div>
-    </section>
+   <section id="profileView" class="hidden">
+  <div id="profileContent"></div>
+</section>
+
+<section id="archiveView" class="hidden">
+  <div id="archiveContent"></div>
+</section>
 
     <div id="footerNote" class="footer-note"></div>
   </div>
