@@ -3034,6 +3034,15 @@ function renderArchive() {
     }
 
     bootstrapApp();
+    document.getElementById("btnArchiveView").addEventListener("click", () => {
+  state.view = "archive";
+
+  document.getElementById("boardView").classList.add("hidden");
+  document.getElementById("profileView").classList.add("hidden");
+  document.getElementById("archiveView").classList.remove("hidden");
+
+  renderArchive();
+});
   </script>
 </body>
 </html>
