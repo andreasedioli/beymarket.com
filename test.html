@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>BeyMarket X</title>
+
+<style>
+body {
+  background:#0f1115;
+  color:white;
+  font-family:sans-serif;
+  margin:0;
+}
+
+.container {
+  padding:20px;
+  max-width:1000px;
+  margin:auto;
+}
+
+button {
+  padding:8px 12px;
+  cursor:pointer;
+}
+
+.card {
+  background:#15181e;
+  padding:16px;
+  border-radius:12px;
+  margin-bottom:12px;
+}
+
+/* ARCHIVIO */
+.archive-item {
+  padding:12px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
+}
+
+.archive-item:hover {
+  background:#1a1d23;
+}
+
+/* PRODUCT */
+.product-header {
+  display:flex;
+  gap:20px;
+}
+
+.product-image {
+  width:150px;
+  height:150px;
+  background:#222;
+}
+
+.info-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  color:#aaa;
+}
+
+/* OFFERS */
+.offer-row {
+  display:grid;
+  grid-template-columns:2fr 1fr 1fr 1fr;
+  padding:10px;
+  border-bottom:1px solid #222;
+}
+
+.offer-row:hover {
+  background:#1a1d23;
+}
+
+.nav {
+  display:flex;
+  gap:10px;
+  margin-bottom:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="nav">
+  <button onclick="showView('board')">Bacheca</button>
+  <button onclick="showView('archive')">Archivio</button>
+</div>
+
+<div id="view"></div>
+
+</div>
+
+<script>
+
+// 🔥 DATABASE PEZZI
+const BEY_DATABASE = [
+  { name: "Dran Sword 3-60F", type:"Beyblade", release:"BX-01"},
+  { name: "Wizard Arrow 4-80B", type:"Beyblade", release:"BX-02"},
+  { name: "Taper Bit", type:"Bit"}
+];
+
+// 🔥 ANNUNCI (simulazione)
+let listings = [
+  {id:1,title:"Dran Sword 3-60F",price:14,condition:"Usato",owner:"Marco"},
+  {id:2,title:"Dran Sword 3-60F",price:12,condition:"Nuovo",owner:"Luca"},
+  {id:3,title:"Wizard Arrow 4-80B",price:19,condition:"Nuovo",owner:"Sara"}
+];
+
+let currentView = "board";
+
+// =======================
+// NAV
+// =======================
+
+function showView(view){
+  currentView = view;
+
+  if(view==="board") renderBoard();
+  if(view==="archive") renderArchive();
+}
+
+// =======================
+// BOARD
+// =======================
+
+function renderBoard(){
+  document.getElementById("view").innerHTML = `
+    <h2>Bacheca</h2>
+    ${listings.map(l=>`
+      <div class="card">
+        <b>${l.title}</b><br>
+        €${l.price} - ${l.owner}
+      </div>
+    `).join("")}
+  `;
+}
+
+// =======================
+// ARCHIVE
+// =======================
+
+function renderArchive(){
+  document.getElementById("view").innerHTML = `
+    <h2>Archivio</h2>
+
+    ${BEY_DATABASE.map(b=>{
+      const offers = listings.filter(l=>l.title===b.name);
+      const min = offers.length ? Math.min(...offers.map(o=>o.price)) : "-";
+
+      return `
+        <div class="archive-item" onclick="openProduct('${b.name}')">
+          <b>${b.name}</b><br>
+          Offerte: ${offers.length} | Min: €${min}
+        </div>
+      `
+    }).join("")}
+  `;
+}
+
+// =======================
+// PRODUCT PAGE
+// =======================
+
+function openProduct(name){
+  const item = BEY_DATABASE.find(b=>b.name===name);
+
+  const offers = listings
+    .filter(l=>l.title===name)
+    .sort((a,b)=>a.price-b.price);
+
+  const min = offers.length ? offers[0].price : "-";
+
+  document.getElementById("view").innerHTML = `
+    
+    <button onclick="renderArchive()">⬅ Torna</button>
+
+    <div class="card">
+
+      <div class="product-header">
+        
+        <div class="product-image"></div>
+
+        <div>
+          <h2>${item.name}</h2>
+
+          <div class="info-grid">
+            <div>Tipo: ${item.type}</div>
+            <div>Release: ${item.release || "-"}</div>
+            <div>Offerte: ${offers.length}</div>
+            <div>Prezzo min: €${min}</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="card">
+      <h3>Offerte</h3>
+
+      <div class="offer-row" style="font-weight:bold;">
+        <div>Venditore</div>
+        <div>Condizione</div>
+        <div>Prezzo</div>
+        <div></div>
+      </div>
+
+      ${offers.map(o=>`
+        <div class="offer-row">
+          <div>${o.owner}</div>
+          <div>${o.condition}</div>
+          <div>€${o.price}</div>
+          <div><button>Compra</button></div>
+        </div>
+      `).join("")}
+
+    </div>
+  `;
+}
+
+// =======================
+
+renderBoard();
+
+</script>
+
+</body>
+</html>
