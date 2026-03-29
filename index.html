@@ -1663,6 +1663,8 @@ function renderArchive() {
   }).join("");
 }
     function setView(view) {
+      document.getElementById("archiveView").classList.toggle("hidden", view !== "archive");
+document.getElementById("btnArchiveView").classList.toggle("active", view === "archive");
       if (view === "profile" && !state.currentUser) {
         openModal("authModal");
         return;
